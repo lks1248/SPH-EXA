@@ -119,6 +119,19 @@ public:
       pbc{pbcX, pbcY, pbcZ}
     {}
 
+    HOST_DEVICE_FUN constexpr
+        Box(T xmin, T xmax, T ymin, T ymax, T zmin, T zmax,
+            bool pbcX = false, bool pbcY = false, bool pbcZ = false,
+            bool fbcX = false, bool fbcY = false, bool fbcZ = false)
+        : limits{xmin, xmax, ymin, ymax, zmin, zmax},
+        lengths_{xmax-xmin, ymax-ymin, zmax-zmin},
+        inverseLengths_{T(1.)/(xmax-xmin), T(1.)/(ymax-ymin), T(1.)/(zmax-zmin)},
+        pbc{pbcX, pbcY, pbcZ},
+        fbc{fbcX, fbcY, fbcZ}
+    {}
+
+
+
     HOST_DEVICE_FUN constexpr T xmin() const { return limits[0]; }
     HOST_DEVICE_FUN constexpr T xmax() const { return limits[1]; }
     HOST_DEVICE_FUN constexpr T ymin() const { return limits[2]; }
@@ -140,6 +153,9 @@ public:
     HOST_DEVICE_FUN constexpr bool pbcY() const { return pbc[1]; } // NOLINT
     HOST_DEVICE_FUN constexpr bool pbcZ() const { return pbc[2]; } // NOLINT
 
+    HOST_DEVICE_FUN constexpr bool fbcX() const { return fbc[0]; } // NOLINT
+    HOST_DEVICE_FUN constexpr bool fbcY() const { return fbc[1]; } // NOLINT
+    HOST_DEVICE_FUN constexpr bool fbcZ() const { return fbc[2]; } // NOLINT
     //! @brief return the shortest coordinate range in any dimension
     HOST_DEVICE_FUN constexpr T minExtent() const
     {
@@ -164,13 +180,17 @@ private:
                && a.limits[5] == b.limits[5]
                && a.pbc[0] == b.pbc[0]
                && a.pbc[1] == b.pbc[1]
-               && a.pbc[2] == b.pbc[2];
+               && a.pbc[2] == b.pbc[2]
+               && a.fbc[0] == b.fbc[0]
+               && a.fbc[1] == b.fbc[1]
+               && a.fbc[2] == b.fbc[2];
     }
 
     T limits[6];
     T lengths_[3];
     T inverseLengths_[3];
     bool pbc[3];
+    bool fbc[3] = {false, false, false};
 };
 
 //! @brief Fold X into periodic boundaries,

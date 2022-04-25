@@ -109,6 +109,8 @@ void writeH5Part(Dataset& d, size_t firstIndex, size_t lastIndex, const cstone::
     H5PartWriteStepAttrib(h5_file, "box", H5PART_FLOAT64, extents, 6);
     h5part_int32_t pbc[3] = {box.pbcX(), box.pbcY(), box.pbcZ()};
     H5PartWriteStepAttrib(h5_file, "pbc", H5PART_INT32, pbc, 3);
+    h5part_int32_t fbc[3] = {box.fbcX(), box.fbcY(), box.fbcZ()};
+    H5PartWriteStepAttrib(h5_file, "fbc", H5PART_INT32, fbc, 3);
 
     const h5_int64_t h5_num_particles = lastIndex - firstIndex;
     // set number of particles that each rank will write

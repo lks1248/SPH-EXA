@@ -6,6 +6,8 @@
 #include "math.hpp"
 #include "kernels.hpp"
 #include "kernel/momentum_energy_kern.hpp"
+
+#include "fbc_corrections.hpp"
 #ifdef USE_CUDA
 #include "cuda/sph.cuh"
 #endif
@@ -54,6 +56,11 @@ void computeMomentumAndEnergyImpl(size_t startIndex, size_t endIndex, size_t ngm
 
     T minDt = INFINITY;
 
+    const bool fbcX = box.fbcX();
+    const bool fbcY = box.fbcY();
+    const bool fbcZ = box.fbcZ();
+    const bool anyFBC = box.fbcX() || box.fbcY() || box.fbcZ();
+
 #pragma omp parallel for schedule(static) reduction(min : minDt)
     for (size_t i = startIndex; i < endIndex; ++i)
     {
@@ -94,6 +101,17 @@ void computeMomentumAndEnergyImpl(size_t startIndex, size_t endIndex, size_t ngm
 
         T dt_i = kernels::tsKCourant(maxvsignal, h[i], c[i], d.Kcour);
         minDt  = std::min(minDt, dt_i);
+
+        if(anyFBC)
+        {
+            T dist = distToFbc(x[i], y[i], z[i], box);
+            if(dist <= 2.0 * h[i])
+            {
+                grad_P_x[i] += gradCorrection(h[i], p[i], rho[i], dist, fbcX);
+                grad_P_y[i] += gradCorrection(h[i], p[i], rho[i], dist, fbcY);
+                grad_P_z[i] += gradCorrection(h[i], p[i], rho[i], dist, fbcZ);
+            }
+        }
     }
 
     d.minDt_loc = minDt;

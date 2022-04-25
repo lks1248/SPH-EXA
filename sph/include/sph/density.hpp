@@ -5,6 +5,8 @@
 #include "cstone/findneighbors.hpp"
 
 #include "kernel/density_kern.hpp"
+
+#include "fbc_corrections.hpp"
 #ifdef USE_CUDA
 #include "cuda/sph.cuh"
 #endif
@@ -33,6 +35,8 @@ void computeDensityImpl(size_t startIndex, size_t endIndex, size_t ngmax, Datase
     const T K         = d.K;
     const T sincIndex = d.sincIndex;
 
+    const bool anyFBC = box.fbcX() || box.fbcY() || box.fbcZ();
+
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; i++)
     {
@@ -45,6 +49,15 @@ void computeDensityImpl(size_t startIndex, size_t endIndex, size_t ngmax, Datase
 
         rho[i] = kernels::densityJLoop(
             i, sincIndex, K, box, neighbors + ngmax * ni, neighborsCount[i], x, y, z, h, m, wh, whd);
+
+        if(anyFBC) //adjusting rho for a potential fixed boundary
+        {
+            T dist = distToFbc(x[i], y[i], z[i], box);
+            if(dist <= 2.0 * h[i])
+            {
+                rho[i] *= magCorrection(h[i], dist);
+            }
+        }
 
 #ifndef NDEBUG
         if (std::isnan(rho[i]))

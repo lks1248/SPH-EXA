@@ -77,7 +77,7 @@ public:
 
         H5PartReadStepAttrib(h5_file, "time", &d.ttot);
         H5PartReadStepAttrib(h5_file, "minDt", &d.minDt);
-        H5PartReadStepAttrib(h5_file, "minDt_m1", &d.minDt_m1);
+        //H5PartReadStepAttrib(h5_file, "minDt_m1", &d.minDt_m1);
         H5PartReadStepAttrib(h5_file, "step", &d.iteration);
         d.iteration++;
         H5PartReadStepAttrib(h5_file, "gravConstant", &d.g);
@@ -86,8 +86,18 @@ public:
         H5PartReadStepAttrib(h5_file, "box", extents);
         int pbc[3];
         H5PartReadStepAttrib(h5_file, "pbc", pbc);
+        int fbc[3];
+        H5PartReadStepAttrib(h5_file, "fbc", fbc);
+        for (int i = 0; i < 3; ++i)
+        {
+            if(pbc[i] && fbc[i])
+            {
+                throw std::runtime_error("Axis cannot have both periodic and fixed boundaries\n");
+            }
+        }
         cstone::Box<T> box(
-            extents[0], extents[1], extents[2], extents[3], extents[4], extents[5], pbc[0], pbc[1], pbc[2]);
+            extents[0], extents[1], extents[2], extents[3], extents[4], extents[5],
+            pbc[0], pbc[1], pbc[2], fbc[0], fbc[1], fbc[2]);
 
         resize(d, count);
 
