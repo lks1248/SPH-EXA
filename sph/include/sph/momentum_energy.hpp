@@ -105,7 +105,7 @@ void computeMomentumAndEnergyImpl(size_t startIndex, size_t endIndex, size_t ngm
         if(anyFBC)
         {
             T dist = distToFbc(x[i], y[i], z[i], box);
-            if(dist <= 2.0 * h[i])
+            if(std::abs(dist) <= 2.0 * h[i])
             {
                 grad_P_x[i] += gradCorrection(h[i], p[i], rho[i], dist, fbcX);
                 grad_P_y[i] += gradCorrection(h[i], p[i], rho[i], dist, fbcY);

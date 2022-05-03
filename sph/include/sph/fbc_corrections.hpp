@@ -42,39 +42,45 @@ namespace sph
 template<class T>
 T magCorrection(T hi, T dist)
 {
-    T delta = dist / hi;
+    T delta = std::abs(dist) / hi;
     T corr;
     if (delta <= 1.0)
     {
-        corr = (30.0 - 42.0 * delta + 20.0 * std::pow(delta, 3) - 9.0 * std::pow(delta, 5) + 3.0 * std::pow(delta, 6)) / 60.0;
+        corr = 1.0 /
+               (1 - (30.0 - 42.0 * delta + 20.0 * std::pow(delta, 3) - 9.0 * std::pow(delta, 5) + 3.0 * std::pow(delta, 6)) / 60.0);
     }
     else
     {
-        corr = (32.0 - 48.0 * delta + 40.0 * std::pow(delta, 3) - 30.0 * std::pow(delta, 4) + 9.0 * std::pow(delta, 5) - std::pow(delta, 6)) / 60.0;
+        corr = 1.0 /
+               (1 - (32.0 - 48.0 * delta + 40.0 * std::pow(delta, 3) - 30.0 * std::pow(delta, 4) + 9.0 * std::pow(delta, 5) - std::pow(delta, 6)) / 60.0);
     }
-    return 1 / (1.0 - corr);
+    return corr;
 }
 
 //! @brief calculates the correction term for the pressure gradients
 template<class T>
-T gradCorrection(T hi, T pi, T rhoi, T dist, bool fbc)
+T gradCorrection(T h_i, T p_i, T rho_i, T dist, bool fbc)
 {
     if(!fbc) return 0.0;
     else
     {
-        T delta = dist / hi;
+        T delta = std::abs(dist) / h_i;
         T corr;
+        T factor = 2.0 * p_i / rho_i;
+
+        if(std::signbit(dist)) factor *= -1.0;
+
         if (delta <= 1.0)
         {
-            corr = pi / rhoi *
-                   (-(14.0 - 20.0 * delta * delta + 15.0 * std::pow(delta, 4) - 6 * std::pow(delta, 5)) / 20.0 * hi);
+
+            corr = factor *
+                   (-(14.0 - 20.0 * delta * delta + 15.0 * std::pow(delta, 4) - 6 * std::pow(delta, 5)) / (20.0 * h_i));
         }
         else
         {
-            corr = pi / rhoi *
+            corr = factor *
                    (-(16.0 - 40.0 * delta * delta + 40.0 * std::pow(delta, 3) - 15.0 * std::pow(delta, 4) +
-                      2.0 * std::pow(delta, 5)) /
-                    20 * hi);
+                      2.0 * std::pow(delta, 5)) / (20 * h_i));
         }
         return corr;
     }
@@ -90,7 +96,7 @@ T distToFbc(T xi, T yi, T zi, const cstone::Box<T> box)
         T distXmax = std::abs(box.xmax() - xi);
         T distXmin = std::abs(box.xmin() - xi);
 
-        if(distXmax < distXmin) return distXmax;
+        if(distXmax < distXmin) return -distXmax;
         else return distXmin;
     }
 
@@ -99,7 +105,7 @@ T distToFbc(T xi, T yi, T zi, const cstone::Box<T> box)
         T distYmax = std::abs(box.ymax() - yi);
         T distYmin = std::abs(box.ymin() - yi);
 
-        if(distYmax < distYmin) return distYmax;
+        if(distYmax < distYmin) return -distYmax;
         else return distYmin;
     }
 
@@ -108,11 +114,16 @@ T distToFbc(T xi, T yi, T zi, const cstone::Box<T> box)
         T distZmax = std::abs(box.zmax() - zi);
         T distZmin = std::abs(box.zmin() - zi);
 
-        if(distZmax < distZmin) return distZmax;
+        if(distZmax < distZmin) return -distZmax;
         else return distZmin;
     }
 
     throw std::runtime_error("this should not happen");
+}
+template<typename T>
+int sign(T val)
+{
+    return(T(0) < val) - (val <T(0));
 }
 }
 }
