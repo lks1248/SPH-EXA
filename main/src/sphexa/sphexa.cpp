@@ -85,6 +85,7 @@ int main(int argc, char** argv)
     const size_t             problemSize       = parser.get("-n", 50);
     const std::string        glassBlock        = parser.get("--glass");
     const bool               ve                = parser.exists("--ve");
+    const bool               artificialG       = parser.exists("--artgrav");
     const std::string        maxStepStr        = parser.get("-s", std::string("200"));
     const std::string        writeFrequencyStr = parser.get("-w", std::string("0"));
     std::vector<std::string> writeExtra        = parser.getCommaList("--wextra");
@@ -133,7 +134,7 @@ int main(int argc, char** argv)
     // we want about 100 global nodes per rank to decompose the domain with +-1% accuracy
     size_t bucketSize = std::max(bucketSizeFocus, d.numParticlesGlobal / (100 * numRanks));
     Domain domain(rank, numRanks, bucketSize, bucketSizeFocus, theta, box);
-    auto   propagator = propagatorFactory<Domain, Dataset>(ve, ngmax, ng0, output, rank, haveGrav);
+    auto   propagator = propagatorFactory<Domain, Dataset>(ve, artificialG, ngmax, ng0, output, rank, haveGrav);
 
     propagator->sync(domain, d);
     if (rank == 0) std::cout << "Domain synchronized, nLocalParticles " << d.x.size() << std::endl;
