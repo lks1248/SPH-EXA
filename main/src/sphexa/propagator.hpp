@@ -313,6 +313,8 @@ public:
 
         computeTimestep(first, last, d);
         timer.step("Timestep");
+        artificialGravity(first, last, d.ay.data());
+        timer.step("artificialGravity");
         computePositions(first, last, d, domain.box());
         timer.step("UpdateQuantities");
         computeTotalEnergy(first, last, d);
