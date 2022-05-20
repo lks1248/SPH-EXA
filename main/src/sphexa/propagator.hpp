@@ -32,7 +32,6 @@
 
 #pragma once
 
-#include <iostream>
 #include <variant>
 
 #include "cstone/domain/domain.hpp"
@@ -52,21 +51,23 @@ template<class DomainType, class ParticleDataType>
 class Propagator
 {
 public:
-    Propagator(size_t ngmax, size_t ng0, std::ostream& output, size_t rank, bool doGrav)
+    Propagator(size_t ngmax, size_t ng0, std::ostream& output, size_t rank)
         : timer(output, rank)
         , out(output)
         , rank_(rank)
         , ngmax_(ngmax)
         , ng0_(ng0)
-        , doGravity_(doGrav)
     {
     }
+
+    virtual void activateFields(ParticleDataType& d) = 0;
 
     virtual void sync(DomainType& domain, ParticleDataType& d) = 0;
 
     virtual void step(DomainType& domain, ParticleDataType& d) = 0;
 
     virtual void prepareOutput(ParticleDataType& d, size_t startIndex, size_t endIndex){};
+    virtual void finishOutput(ParticleDataType& d){};
 
     virtual ~Propagator() = default;
 
@@ -79,8 +80,6 @@ protected:
     size_t ngmax_;
     //! target number of neighbors per particle
     size_t ng0_;
-
-    bool doGravity_;
 
     void printIterationTimings(const DomainType& domain, const ParticleDataType& d)
     {
@@ -134,7 +133,6 @@ template<class DomainType, class ParticleDataType>
 class HydroProp final : public Propagator<DomainType, ParticleDataType>
 {
     using Base = Propagator<DomainType, ParticleDataType>;
-    using Base::doGravity_;
     using Base::ng0_;
     using Base::ngmax_;
     using Base::timer;
@@ -150,14 +148,20 @@ class HydroProp final : public Propagator<DomainType, ParticleDataType>
     MHolder_t mHolder_;
 
 public:
-    HydroProp(size_t ngmax, size_t ng0, std::ostream& output, size_t rank, bool doGravity)
-        : Base(ngmax, ng0, output, rank, doGravity)
+    HydroProp(size_t ngmax, size_t ng0, std::ostream& output, size_t rank)
+        : Base(ngmax, ng0, output, rank)
     {
+    }
+
+    void activateFields(ParticleDataType& d) override
+    {
+        d.setConserved("x", "y", "z", "h", "m", "u", "vx", "vy", "vz", "x_m1", "y_m1", "z_m1", "du_m1");
+        d.setDependent("rho", "p", "c", "ax", "ay", "az", "du", "c11", "c12", "c13", "c22", "c23", "c33", "keys", "nc");
     }
 
     void sync(DomainType& domain, ParticleDataType& d) override
     {
-        if (doGravity_)
+        if (d.g != 0.0)
         {
             domain.syncGrav(d.codes, d.x, d.y, d.z, d.h, d.m, d.u, d.vx, d.vy, d.vz, d.x_m1, d.y_m1, d.z_m1, d.du_m1);
         }
@@ -170,7 +174,7 @@ public:
         sync(domain, d);
         timer.step("domain::sync");
 
-        resize(d, domain.nParticlesWithHalos());
+        d.resize(domain.nParticlesWithHalos());
         resizeNeighbors(d, domain.nParticles() * ngmax_);
         size_t first = domain.startIndex();
         size_t last  = domain.endIndex();
@@ -194,7 +198,7 @@ public:
         computeMomentumAndEnergy(first, last, ngmax_, d, domain.box());
         timer.step("MomentumEnergyIAD");
 
-        if (doGravity_)
+        if (d.g != 0.0)
         {
             mHolder_.upsweep(d, domain);
             timer.step("Upsweep");
@@ -228,7 +232,6 @@ template<class DomainType, class ParticleDataType>
 class HydroVeProp final : public Propagator<DomainType, ParticleDataType>
 {
     using Base = Propagator<DomainType, ParticleDataType>;
-    using Base::doGravity_;
     using Base::ng0_;
     using Base::ngmax_;
     using Base::timer;
@@ -245,14 +248,38 @@ class HydroVeProp final : public Propagator<DomainType, ParticleDataType>
     MHolder_t mHolder_;
 
 public:
-    HydroVeProp(size_t ngmax, size_t ng0, std::ostream& output, size_t rank, bool doGravity)
-        : Base(ngmax, ng0, output, rank, doGravity)
+    HydroVeProp(size_t ngmax, size_t ng0, std::ostream& output, size_t rank)
+        : Base(ngmax, ng0, output, rank)
     {
+    }
+
+    void activateFields(ParticleDataType& d) override
+    {
+        d.setConserved("x", "y", "z", "h", "m", "u", "vx", "vy", "vz", "x_m1", "y_m1", "z_m1", "du_m1", "alpha");
+        d.setDependent("p",
+                       "c",
+                       "ax",
+                       "ay",
+                       "az",
+                       "du",
+                       "c11",
+                       "c12",
+                       "c13",
+                       "c22",
+                       "c23",
+                       "c33",
+                       "xm",
+                       "kx",
+                       "divv",
+                       "curlv",
+                       "gradh",
+                       "keys",
+                       "nc");
     }
 
     void sync(DomainType& domain, ParticleDataType& d) override
     {
-        if (doGravity_)
+        if (d.g != 0.0)
         {
             domain.syncGrav(
                 d.codes, d.x, d.y, d.z, d.h, d.m, d.u, d.vx, d.vy, d.vz, d.x_m1, d.y_m1, d.z_m1, d.du_m1, d.alpha);
@@ -270,7 +297,7 @@ public:
         sync(domain, d);
         timer.step("domain::sync");
 
-        resize(d, domain.nParticlesWithHalos());
+        d.resize(domain.nParticlesWithHalos());
         resizeNeighbors(d, domain.nParticles() * ngmax_);
         size_t first = domain.startIndex();
         size_t last  = domain.endIndex();
@@ -303,7 +330,7 @@ public:
         computeGradPVE(first, last, ngmax_, d, domain.box());
         timer.step("MomentumAndEnergy");
 
-        if (doGravity_)
+        if (d.g != 0.0)
         {
             mHolder_.upsweep(d, domain);
             timer.step("Upsweep");
@@ -326,133 +353,43 @@ public:
         this->printIterationTimings(domain, d);
     }
 
+    //! @brief configure the dataset for output
     void prepareOutput(ParticleDataType& d, size_t startIndex, size_t endIndex) override
     {
-        auto fieldPointers = getOutputArrays(d);
-
-        for (size_t outIdx = 0; outIdx < fieldPointers.size(); ++outIdx)
+        bool outputRho =
+            std::find(d.outputFieldNames.begin(), d.outputFieldNames.end(), "rho") != d.outputFieldNames.end();
+        if (outputRho)
         {
-            if (d.outputFieldNames[outIdx] == "rho")
-            {
-                auto computeRho =
-                    [startIndex, endIndex, kx = d.kx.data(), m = d.m.data(), xm = d.xm.data()](auto* varField)
-                {
-#pragma omp parallel for schedule(static)
-                    for (size_t i = startIndex; i < endIndex; ++i)
-                    {
-                        varField[i] = kx[i] * m[i] / xm[i];
-                    }
-                };
+            d.release("c11");
+            d.acquire("rho");
 
-                std::visit(computeRho, fieldPointers[outIdx]);
+#pragma omp parallel for schedule(static)
+            for (size_t i = startIndex; i < endIndex; ++i)
+            {
+                d.rho[i] = d.kx[i] * d.m[i] / d.xm[i];
             }
         }
     }
-};
 
-template<class DomainType, class ParticleDataType>
-class HydroArtGravProp final : public Propagator<DomainType, ParticleDataType>
-{
-    using Base = Propagator<DomainType, ParticleDataType>;
-    using Base::doGravity_;
-    using Base::ng0_;
-    using Base::ngmax_;
-    using Base::timer;
-
-    using T             = typename ParticleDataType::RealType;
-    using KeyType       = typename ParticleDataType::KeyType;
-    using MultipoleType = ryoanji::CartesianQuadrupole<float>;
-
-    using Acc = typename ParticleDataType::AcceleratorType;
-    using MHolder_t =
-        typename detail::AccelSwitchType<Acc, MultipoleHolderCpu, MultipoleHolderGpu>::template type<MultipoleType,
-                                                                                                     KeyType, T, T, T>;
-    MHolder_t mHolder_;
-
-public:
-    HydroArtGravProp(size_t ngmax, size_t ng0, std::ostream& output, size_t rank, bool doGravity)
-        : Base(ngmax, ng0, output, rank, doGravity)
+    //! @brief undo output configuration and restore compute configuration
+    void finishOutput(ParticleDataType& d) override
     {
-    }
-
-    void sync(DomainType& domain, ParticleDataType& d) override
-    {
-        if (doGravity_)
+        bool outputRho =
+            std::find(d.outputFieldNames.begin(), d.outputFieldNames.end(), "rho") != d.outputFieldNames.end();
+        if (outputRho)
         {
-            domain.syncGrav(d.codes, d.x, d.y, d.z, d.h, d.m, d.u, d.vx, d.vy, d.vz, d.x_m1, d.y_m1, d.z_m1, d.du_m1);
+            d.release("rho");
+            d.acquire("c11");
         }
-        else { domain.sync(d.codes, d.x, d.y, d.z, d.h, d.m, d.u, d.vx, d.vy, d.vz, d.x_m1, d.y_m1, d.z_m1, d.du_m1); }
-    }
-
-    void step(DomainType& domain, ParticleDataType& d) override
-    {
-        timer.start();
-        sync(domain, d);
-        timer.step("domain::sync");
-
-        resize(d, domain.nParticlesWithHalos());
-        resizeNeighbors(d, domain.nParticles() * ngmax_);
-        size_t first = domain.startIndex();
-        size_t last  = domain.endIndex();
-
-        std::fill(begin(d.m), begin(d.m) + first, d.m[first]);
-        std::fill(begin(d.m) + last, end(d.m), d.m[first]);
-
-        findNeighborsSfc<T, KeyType>(
-            first, last, ngmax_, d.x, d.y, d.z, d.h, d.codes, d.neighbors, d.neighborsCount, domain.box());
-        timer.step("FindNeighbors");
-        computeDensity(first, last, ngmax_, d, domain.box());
-        timer.step("Density");
-        computeEquationOfState3L(first, last, d);
-        timer.step("EquationOfState");
-        domain.exchangeHalos(d.vx, d.vy, d.vz, d.rho, d.p, d.c);
-        timer.step("mpi::synchronizeHalos");
-        computeIAD(first, last, ngmax_, d, domain.box());
-        timer.step("IAD");
-        domain.exchangeHalos(d.c11, d.c12, d.c13, d.c22, d.c23, d.c33);
-        timer.step("mpi::synchronizeHalos");
-        computeMomentumAndEnergy(first, last, ngmax_, d, domain.box());
-        timer.step("MomentumEnergyIAD");
-
-        if (doGravity_)
-        {
-            mHolder_.upsweep(d, domain);
-            timer.step("Upsweep");
-            mHolder_.traverse(d, domain);
-            timer.step("Gravity");
-
-#ifdef USE_CUDA
-            size_t sizeWithHalos = d.x.size();
-            size_t size_np_T     = sizeWithHalos * sizeof(decltype(d.ax[0]));
-            CHECK_CUDA_ERR(cudaMemcpy(d.ax.data(), d.devPtrs.d_ax, size_np_T, cudaMemcpyDeviceToHost));
-            CHECK_CUDA_ERR(cudaMemcpy(d.ay.data(), d.devPtrs.d_ay, size_np_T, cudaMemcpyDeviceToHost));
-            CHECK_CUDA_ERR(cudaMemcpy(d.az.data(), d.devPtrs.d_az, size_np_T, cudaMemcpyDeviceToHost));
-#endif
-        }
-
-        computeTimestep(first, last, d);
-        timer.step("Timestep");
-        artificialGravity(first, last, d.ay.data());
-        timer.step("artificialGravity");
-        computePositions(first, last, d, domain.box());
-        timer.step("UpdateQuantities");
-        computeTotalEnergy(first, last, d);
-        timer.step("EnergyConservation");
-        updateSmoothingLength(first, last, d, ng0_);
-        timer.step("UpdateSmoothingLength");
-
-        timer.stop();
-        this->printIterationTimings(domain, d);
     }
 };
 
 template<class DomainType, class ParticleDataType>
-std::unique_ptr<Propagator<DomainType, ParticleDataType>>
-propagatorFactory(bool ve, bool artG, size_t ngmax, size_t ng0, std::ostream& output, size_t rank, bool doGravity)
+std::unique_ptr<Propagator<DomainType, ParticleDataType>> propagatorFactory(bool ve, size_t ngmax, size_t ng0,
+                                                                            std::ostream& output, size_t rank)
 {
-    if (ve) { return std::make_unique<HydroVeProp<DomainType, ParticleDataType>>(ngmax, ng0, output, rank, doGravity); }
-    if (artG) {return std::make_unique<HydroArtGravProp<DomainType, ParticleDataType>>(ngmax, ng0, output, rank, doGravity);}
-    else { return std::make_unique<HydroProp<DomainType, ParticleDataType>>(ngmax, ng0, output, rank, doGravity); }
+    if (ve) { return std::make_unique<HydroVeProp<DomainType, ParticleDataType>>(ngmax, ng0, output, rank); }
+    else { return std::make_unique<HydroProp<DomainType, ParticleDataType>>(ngmax, ng0, output, rank); }
 }
 
 } // namespace sphexa
