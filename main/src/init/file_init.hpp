@@ -105,6 +105,7 @@ public:
         initField(h5_file, rank, d.vx, "vx", 0.0);
         initField(h5_file, rank, d.vy, "vy", 0.0);
         initField(h5_file, rank, d.vz, "vz", 0.0);
+        initField(h5_file, rank, d.gradh, "gradh", 1.0);
 
         initField(h5_file, rank, d.du_m1, "du_m1", 0.0);
         initField(h5_file, rank, d.alpha, "alpha", d.alphamin);
