@@ -24,42 +24,31 @@
  */
 
 /*! @file
- * @brief Min-reduction to determine global timestep
+ * @brief Unit tests for DeviceParticlesData
  *
  * @author Sebastian Keller <sebastian.f.keller@gmail.com>
- * @author Aurelien Cavelan
  */
 
-#pragma once
+#include <iostream>
 
-#include <vector>
-#include <math.h>
-#include <algorithm>
+#include "gtest/gtest.h"
 
-#include "kernels.hpp"
+#include "sph/particles_data_gpu.cuh"
 
-#ifdef USE_MPI
-#include "mpi.h"
-#endif
+using namespace sphexa;
 
-namespace sph
+TEST(DeviceParticlesData, resize)
 {
+    DeviceParticlesData<double, unsigned> dev;
 
-template<class Dataset>
-void computeTimestep(size_t startIndex, size_t endIndex, Dataset& d)
-{
-    using T = typename Dataset::RealType;
+    dev.setConserved("x", "y", "z");
+    dev.setDependent("du");
 
-    T minDt = std::min(d.minDt_loc, d.maxDtIncrease * d.minDt);
+    size_t size = 10;
+    dev.resize(10);
 
-#ifdef USE_MPI
-    MPI_Allreduce(MPI_IN_PLACE, &minDt, 1, MpiType<T>{}, MPI_MIN, MPI_COMM_WORLD);
-#endif
-
-    d.ttot += minDt;
-
-    d.minDt_m1 = d.minDt;
-    d.minDt    = minDt;
+    EXPECT_EQ(dev.x.size(), size);
+    EXPECT_EQ(dev.y.size(), size);
+    EXPECT_EQ(dev.z.size(), size);
+    EXPECT_EQ(dev.du.size(), size);
 }
-
-} // namespace sph

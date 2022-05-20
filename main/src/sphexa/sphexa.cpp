@@ -60,7 +60,6 @@ using AccType = cstone::CpuTag;
 #endif
 
 using namespace sphexa;
-using namespace sphexa::sph;
 
 bool stopSimulation(size_t iteration, double time, const std::string& maxStepStr);
 void printHelp(char* binName, int rank);
@@ -154,7 +153,7 @@ int main(int argc, char** argv)
             propagator->finishOutput(d);
         }
 
-        if (d.iteration % 50 == 0) { viz::execute(d, domain.startIndex(), domain.endIndex()); }
+        viz::execute(d, domain.startIndex(), domain.endIndex());
     }
 
     totalTimer.step("Total execution time of " + std::to_string(d.iteration - startIteration) + " iterations of " +
