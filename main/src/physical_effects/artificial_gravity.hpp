@@ -41,6 +41,7 @@ void artificialGravity(size_t startIndex, size_t endIndex, T* ay)
     {
         ay[i] += -0.5;
     }
+
 }
 
 }
