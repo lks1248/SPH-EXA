@@ -81,7 +81,7 @@ veDefGradhJLoop(int i, T sincIndex, T K, const cstone::Box<T>& box, const int* n
     T rhoi   = kxi * mi / xmassi;
     T dhdrho = -hi / (rhoi * T(3)); // This /3 is the dimension hard-coded.
 
-    T gradhi = T(1) - dhdrho * whomegai;
+    T gradhi = T(1); // HACKS TO DISABLE GRADH FOR TESTING
     return {kxi, gradhi};
 }
 
