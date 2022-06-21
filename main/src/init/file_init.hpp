@@ -37,6 +37,7 @@
 
 #include "io/mpi_file_utils.hpp"
 #include "isim_init.hpp"
+#include "fixed_boundaries.hpp"
 
 namespace sphexa
 {
@@ -84,10 +85,18 @@ public:
 
         double extents[6];
         H5PartReadStepAttrib(h5_file, "box", extents);
-        int pbc[3];
-        H5PartReadStepAttrib(h5_file, "pbc", pbc);
-        cstone::Box<T> box(
-            extents[0], extents[1], extents[2], extents[3], extents[4], extents[5], pbc[0], pbc[1], pbc[2]);
+        int boundaries[3];
+        H5PartReadStepAttrib(h5_file, "boundaryType", boundaries);
+
+        cstone::Box<T> box(extents[0],
+                           extents[1],
+                           extents[2],
+                           extents[3],
+                           extents[4],
+                           extents[5],
+                           static_cast<cstone::BoundaryType>(boundaries[0]),
+                           static_cast<cstone::BoundaryType>(boundaries[1]),
+                           static_cast<cstone::BoundaryType>(boundaries[2]));
 
         d.resize(count);
 
@@ -111,6 +120,7 @@ public:
         initField(h5_file, rank, d.alpha, "alpha", d.alphamin);
 
         initXm1(h5_file, rank, d);
+        initFBC(h5_file, rank, first, last, d, box);
 
         std::fill(d.mue.begin(), d.mue.end(), 2.0);
         std::fill(d.mui.begin(), d.mui.end(), 10.0);
@@ -166,6 +176,29 @@ private:
                 d.x_m1[i] = d.x[i] - d.vx[i] * d.minDt;
                 d.y_m1[i] = d.y[i] - d.vy[i] * d.minDt;
                 d.z_m1[i] = d.z[i] - d.vz[i] * d.minDt;
+            }
+        }
+    }
+    template<class T>
+    static void initFBC(H5PartFile* h5_file, int rank, size_t first, size_t last, Dataset& d, cstone::Box<T> box)
+    {
+        auto names  = fileutils::datasetNames(h5_file);
+        bool anyFBC = box.fbcX() || box.fbcY() || box.fbcZ();
+
+        if (anyFBC)
+        {
+            if (rank == 0) std::cout << "applying FBC\n";
+            if (box.fbcX())
+            {
+                applyFixedBoundaries(d.x.data(), d.vx.data(), d.vy.data(), d.vz.data(), d.h.data(), box, first, last);
+            }
+            if (box.fbcY())
+            {
+                applyFixedBoundaries(d.y.data(), d.vx.data(), d.vy.data(), d.vz.data(), d.h.data(), box, first, last);
+            }
+            if (box.fbcZ())
+            {
+                applyFixedBoundaries(d.z.data(), d.vx.data(), d.vy.data(), d.vz.data(), d.h.data(), box, first, last);
             }
         }
     }

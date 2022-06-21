@@ -39,6 +39,27 @@
 namespace sph
 {
 
+/*!
+ * @brief checks whether a particle is in the fixed boundary region
+ *          and has zero velocity
+ *
+ */
+template<class T>
+bool fbcCheck(T coord, T vx, T vy, T vz, T h, T max, T min, bool fbc)
+{
+    if (fbc)
+    {
+        T distMax = std::abs(max - coord);
+        T distMin = std::abs(min - coord);
+
+        if (distMax < 2.0 * h || distMin < 2.0 * h)
+        {
+            if (vx == T(0.0) && vy == vx && vz == vx) { return true; }
+        }
+    }
+    return false;
+}
+
 template<class T, class Dataset>
 void computePositions(size_t startIndex, size_t endIndex, Dataset& d, const cstone::Box<T>& box)
 {
@@ -59,10 +80,23 @@ void computePositions(size_t startIndex, size_t endIndex, Dataset& d, const csto
     T* z_m1  = d.z_m1.data();
     T* u     = d.u.data();
     T* du_m1 = d.du_m1.data();
+    T* h     = d.h.data();
+
+    bool anyFBC = box.fbcX() || box.fbcY() || box.fbcZ();
 
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; i++)
     {
+        if (anyFBC)
+        {
+            if (fbcCheck(x[i], vx[i], vy[i], vz[i], h[i], box.xmax(), box.xmin(), box.fbcX()) ||
+                fbcCheck(y[i], vx[i], vy[i], vz[i], h[i], box.ymax(), box.ymin(), box.fbcY()) ||
+                fbcCheck(z[i], vx[i], vy[i], vz[i], h[i], box.zmax(), box.zmin(), box.fbcZ()))
+            {
+                continue;
+            }
+        }
+
         Vec3T A{d.ax[i], d.ay[i], d.az[i]};
         Vec3T X{x[i], y[i], z[i]};
         Vec3T X_m1{x_m1[i], y_m1[i], z_m1[i]};
