@@ -94,11 +94,7 @@ struct H5PartWriter : public IFileWriter<Dataset>
         }
 
         H5PartFile* h5_file = nullptr;
-#ifdef H5PART_PARALLEL_IO
-        h5_file = H5PartOpenFileParallel(h5_fname, H5PART_WRITE, MPI_COMM_WORLD);
-#else
         h5_file             = H5PartOpenFile(h5_fname, H5PART_WRITE);
-#endif
 
         for (auto it = c.begin(); it != c.end(); ++it)
         {
