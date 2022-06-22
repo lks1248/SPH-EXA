@@ -146,7 +146,6 @@ public:
 
         if(d.iteration == 1)
         {
-            printf("skipping EOS, iteration %d\n", d.iteration);
             auto* p = d.p.data();
             auto* u = d.u.data();
             auto* c = d.c.data();
@@ -162,6 +161,7 @@ public:
                 u[i] = 2.5 / rho / (gamma -1);
                 c[i] = std::sqrt((gamma -1) * u[i]);
             }
+            timer.step("skipped EOS on first iteration");
 
         }
         else
