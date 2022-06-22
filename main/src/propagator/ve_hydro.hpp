@@ -142,8 +142,34 @@ public:
         computeVeDefGradh(first, last, ngmax_, d, domain.box());
         timer.step("Normalization & Gradh");
         transferToHost(d, first, last, {"kx", "gradh"});
-        computeEOS(first, last, d);
-        timer.step("EquationOfState");
+
+
+        if(d.iteration == 1)
+        {
+            printf("skipping EOS, iteration %d\n", d.iteration);
+            auto* p = d.p.data();
+            auto* u = d.u.data();
+            auto* c = d.c.data();
+            auto* kx = d.kx.data();
+            auto* m = d.m.data();
+            auto* xm = d.xm.data();
+            T gamma = 5./3.;
+
+#pragma omp parallel for schedule(static)
+            for (size_t i = first; i < last; ++i) {
+                auto rho             = kx[i] * m[i] / xm[i];
+                p[i] = 2.5;
+                u[i] = 2.5 / rho / (gamma -1);
+                c[i] = std::sqrt((gamma -1) * u[i]);
+            }
+
+        }
+        else
+        {
+            computeEOS(first, last, d);
+            timer.step("EquationOfState");
+        }
+
 
         domain.exchangeHalos(d.vx, d.vy, d.vz, d.prho, d.c, d.kx);
         timer.step("mpi::synchronizeHalos");
