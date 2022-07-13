@@ -144,7 +144,7 @@ public:
         transferToHost(d, first, last, {"kx", "gradh"});
 
 
-        if(d.iteration == 1)
+        if(d.iteration < 10)
         {
             auto* p = d.p.data();
             auto* u = d.u.data();
@@ -161,7 +161,7 @@ public:
                 u[i] = 2.5 / rho / (gamma -1);
                 c[i] = std::sqrt((gamma -1) * u[i]);
             }
-            timer.step("skipped EOS on first iteration");
+            timer.step("skipped EOS on first ten iterations");
 
         }
         else
