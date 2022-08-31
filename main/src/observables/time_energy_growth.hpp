@@ -88,8 +88,8 @@ T computeKHGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, const csto
         throw std::runtime_error("kx was empty. KHGrowthRate only supported with volume elements (--prop ve)\n");
     }
 
-    std::array<T, 3> localSum = localGrowthRate(
-        startIndex, endIndex, d.x.data(), d.y.data(), d.vy.data(), d.xm.data(), d.kx.data(), box);
+    std::array<T, 3> localSum =
+        localGrowthRate(startIndex, endIndex, d.x.data(), d.y.data(), d.vy.data(), d.xm.data(), d.kx.data(), box);
 
     int              rootRank = 0;
     std::array<T, 3> sum;
