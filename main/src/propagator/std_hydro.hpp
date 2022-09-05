@@ -34,6 +34,7 @@
 
 #include <variant>
 
+#include "sph/particles_data.hpp"
 #include "sph/particles_get.hpp"
 #include "sph/sph.hpp"
 
@@ -91,25 +92,26 @@ public:
         //! @brief Fields accessed in domain sync are not part of extensible lists.
         d.setConserved("x", "y", "z", "h", "m");
         d.setDependent("keys");
-
         std::apply([&d](auto... f) { d.setConserved(f.value...); }, make_tuple(ConservedFields{}));
         std::apply([&d](auto... f) { d.setDependent(f.value...); }, make_tuple(DependentFields{}));
 
-        d.devData.setConserved("x", "y", "z", "h", "m", "vx", "vy", "vz");
-        d.devData.setDependent("rho", "p", "c", "ax", "ay", "az", "du", "c11", "c12", "c13", "c22", "c23", "c33",
-                               "keys");
+        d.devData.setConserved("x", "y", "z", "h", "m");
+        d.devData.setDependent("keys");
+        std::apply([&d](auto... f) { d.devData.setConserved(f.value...); }, make_tuple(ConservedFields{}));
+        std::apply([&d](auto... f) { d.devData.setDependent(f.value...); }, make_tuple(DependentFields{}));
     }
 
     void sync(DomainType& domain, ParticleDataType& d) override
     {
         if (d.g != 0.0)
         {
-            domain.syncGrav(d.codes, d.x, d.y, d.z, d.h, d.m, getHost<ConservedFields>(d), getHost<DependentFields>(d));
+            domain.syncGrav(get<"keys">(d), get<"x">(d), get<"y">(d), get<"z">(d), get<"h">(d), get<"m">(d),
+                            get<ConservedFields>(d), get<DependentFields>(d));
         }
         else
         {
-            domain.sync(d.codes, d.x, d.y, d.z, d.h, std::tuple_cat(std::tie(d.m), getHost<ConservedFields>(d)),
-                        getHost<DependentFields>(d));
+            domain.sync(get<"keys">(d), get<"x">(d), get<"y">(d), get<"z">(d), get<"h">(d),
+                        std::tuple_cat(std::tie(get<"m">(d)), get<ConservedFields>(d)), get<DependentFields>(d));
         }
     }
 
@@ -124,34 +126,26 @@ public:
         size_t first = domain.startIndex();
         size_t last  = domain.endIndex();
 
-        std::fill(begin(d.m), begin(d.m) + first, d.m[first]);
-        std::fill(begin(d.m) + last, end(d.m), d.m[first]);
+        transferToHost(d, first, first + 1, {"m"});
+        fill(get<"m">(d), 0, first, d.m[first]);
+        fill(get<"m">(d), last, domain.nParticlesWithHalos(), d.m[first]);
 
-        findNeighborsSfc<T, KeyType>(first, last, ngmax_, d.x, d.y, d.z, d.h, d.codes, d.neighbors, d.neighborsCount,
-                                     domain.box());
-        d.devData.release("du");
-        d.devData.acquire("u");
-        transferToDevice(d, first, last, {"vx", "vy", "vz", "u"});
+        findNeighborsSfc<T, KeyType>(first, last, ngmax_, d.x, d.y, d.z, d.h, d.keys, d.neighbors, d.nc, domain.box());
         timer.step("FindNeighbors");
 
-        transferToDevice(d, 0, domain.nParticlesWithHalos(), {"x", "y", "z", "h", "m", "keys"});
         computeDensity(first, last, ngmax_, d, domain.box());
         timer.step("Density");
         computeEOS_HydroStd(first, last, d);
         timer.step("EquationOfState");
 
-        domain.exchangeHalosAuto(get<"vx", "vy", "vz", "rho", "p", "c">(d), std::get<0>(get<"ax">(d)),
-                                 std::get<0>(get<"ay">(d)));
+        domain.exchangeHalos(get<"vx", "vy", "vz", "rho", "p", "c">(d), get<"ax">(d), get<"ay">(d));
 
         timer.step("mpi::synchronizeHalos");
-        d.devData.release("u");
-        d.devData.acquire("du");
 
         computeIAD(first, last, ngmax_, d, domain.box());
         timer.step("IAD");
 
-        domain.exchangeHalosAuto(get<"c11", "c12", "c13", "c22", "c23", "c33">(d), std::get<0>(get<"ax">(d)),
-                                 std::get<0>(get<"ay">(d)));
+        domain.exchangeHalos(get<"c11", "c12", "c13", "c22", "c23", "c33">(d), get<"ax">(d), get<"ay">(d));
 
         timer.step("mpi::synchronizeHalos");
 
@@ -165,7 +159,6 @@ public:
             mHolder_.traverse(d, domain);
             timer.step("Gravity");
         }
-        transferToHost(d, first, last, {"ax", "ay", "az", "du"});
 
         computeTimestep(d);
         timer.step("Timestep");
@@ -175,6 +168,11 @@ public:
         timer.step("UpdateSmoothingLength");
 
         timer.stop();
+    }
+
+    void prepareOutput(ParticleDataType& d, size_t first, size_t last) override
+    {
+        transferToHost(d, first, last, conservedFields());
     }
 };
 

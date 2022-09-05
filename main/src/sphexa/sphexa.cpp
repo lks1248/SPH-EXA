@@ -111,6 +111,7 @@ int main(int argc, char** argv)
     propagator->activateFields(d);
     propagator->restoreState(initCond, d.comm);
     cstone::Box<Real> box = simInit->init(rank, numRanks, problemSize, d);
+    transferToDevice(d, 0, d.x.size(), propagator->conservedFields());
     d.setOutputFields(outputFields.empty() ? propagator->conservedFields() : outputFields);
 
     bool  haveGrav = (d.g != 0.0);

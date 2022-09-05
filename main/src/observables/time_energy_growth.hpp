@@ -114,7 +114,6 @@ public:
 
     void computeAndWrite(Dataset& d, size_t firstIndex, size_t lastIndex, cstone::Box<T>& box)
     {
-        d.totalNeighbors = neighborsSum(firstIndex, lastIndex, d.neighborsCount);
         computeConservedQuantities(firstIndex, lastIndex, d);
         T khgr = computeKHGrowthRate<T>(firstIndex, lastIndex, d, box);
 
@@ -123,18 +122,8 @@ public:
 
         if (rank == 0)
         {
-            fileutils::writeColumns(constantsFile,
-                                    ' ',
-                                    d.iteration,
-                                    d.ttot,
-                                    d.minDt,
-                                    d.etot,
-                                    d.ecin,
-                                    d.eint,
-                                    d.egrav,
-                                    d.linmom,
-                                    d.angmom,
-                                    khgr);
+            fileutils::writeColumns(constantsFile, ' ', d.iteration, d.ttot, d.minDt, d.etot, d.ecin, d.eint, d.egrav,
+                                    d.linmom, d.angmom, khgr);
         }
     }
 };

@@ -34,6 +34,8 @@
 
 #include <variant>
 
+#include "sph/particles_data.hpp"
+#include "sph/particles_get.hpp"
 #include "sph/sph.hpp"
 
 #include "ipropagator.hpp"
@@ -105,12 +107,13 @@ public:
     {
         if (d.g != 0.0)
         {
-            domain.syncGrav(d.codes, d.x, d.y, d.z, d.h, d.m, getHost<ConservedFields>(d), getHost<DependentFields>(d));
+            domain.syncGrav(get<"keys">(d), get<"x">(d), get<"y">(d), get<"z">(d), get<"h">(d), get<"m">(d),
+                            get<ConservedFields>(d), get<DependentFields>(d));
         }
         else
         {
-            domain.sync(d.codes, d.x, d.y, d.z, d.h, std::tuple_cat(std::tie(d.m), getHost<ConservedFields>(d)),
-                        getHost<DependentFields>(d));
+            domain.sync(get<"keys">(d), get<"x">(d), get<"y">(d), get<"z">(d), get<"h">(d),
+                        std::tuple_cat(std::tie(get<"m">(d)), get<ConservedFields>(d)), get<DependentFields>(d));
         }
     }
 
@@ -128,14 +131,13 @@ public:
         std::fill(begin(d.m), begin(d.m) + first, d.m[first]);
         std::fill(begin(d.m) + last, end(d.m), d.m[first]);
 
-        findNeighborsSfc<T, KeyType>(first, last, ngmax_, d.x, d.y, d.z, d.h, d.codes, d.neighbors, d.neighborsCount,
-                                     domain.box());
+        findNeighborsSfc<T, KeyType>(first, last, ngmax_, d.x, d.y, d.z, d.h, d.keys, d.neighbors, d.nc, domain.box());
         timer.step("FindNeighbors");
 
         transferToDevice(d, 0, domain.nParticlesWithHalos(), {"x", "y", "z", "h", "m", "keys"});
         computeXMass(first, last, ngmax_, d, domain.box());
         timer.step("XMass");
-        domain.exchangeHalosAuto(get<"xm">(d), std::get<0>(get<"ax">(d)), std::get<0>(get<"ay">(d)));
+        domain.exchangeHalos(std::tie(get<"xm">(d)), get<"ax">(d), get<"ay">(d));
         timer.step("mpi::synchronizeHalos");
 
         d.release("ax");
@@ -149,8 +151,7 @@ public:
         computeEOS(first, last, d);
         timer.step("EquationOfState");
 
-        domain.exchangeHalosAuto(get<"vx", "vy", "vz", "prho", "c", "kx">(d), std::get<0>(get<"gradh">(d)),
-                                 std::get<0>(get<"ay">(d)));
+        domain.exchangeHalos(get<"vx", "vy", "vz", "prho", "c", "kx">(d), get<"gradh">(d), get<"ay">(d));
         timer.step("mpi::synchronizeHalos");
 
         d.release("gradh");
@@ -161,15 +162,14 @@ public:
         transferToHost(d, first, last, {"divv", "curlv"});
         timer.step("IadVelocityDivCurl");
 
-        domain.exchangeHalosAuto(get<"c11", "c12", "c13", "c22", "c23", "c33", "divv">(d), std::get<0>(get<"az">(d)),
-                                 std::get<0>(get<"du">(d)));
+        domain.exchangeHalos(get<"c11", "c12", "c13", "c22", "c23", "c33", "divv">(d), get<"az">(d), get<"du">(d));
         timer.step("mpi::synchronizeHalos");
 
         computeAVswitches(first, last, ngmax_, d, domain.box());
         transferToHost(d, first, last, {"alpha"});
         timer.step("AVswitches");
 
-        domain.exchangeHalosAuto(get<"alpha">(d), std::get<0>(get<"az">(d)), std::get<0>(get<"du">(d)));
+        domain.exchangeHalos(std::tie(get<"alpha">(d)), get<"az">(d), get<"du">(d));
         timer.step("mpi::synchronizeHalos");
 
         d.devData.release("divv", "curlv");

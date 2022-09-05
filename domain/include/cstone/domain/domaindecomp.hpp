@@ -40,7 +40,7 @@
 
 #include "cstone/primitives/gather.hpp"
 #include "cstone/tree/octree.hpp"
-#include "cstone/util/index_ranges.hpp"
+#include "index_ranges.hpp"
 #include "cstone/util/gsl-lite.hpp"
 
 namespace cstone
@@ -315,50 +315,23 @@ SendList createSendList(const SpaceCurveAssignment& assignment,
                         gsl::span<const KeyType> particleKeys)
 {
     using IndexType = SendManifest::IndexType;
-    int nRanks      = assignment.numRanks();
+    int numRanks    = assignment.numRanks();
 
-    SendList ret(nRanks);
+    SendList ret(numRanks);
 
-    for (int rank = 0; rank < nRanks; ++rank)
+    std::vector<IndexType> particleLocations(numRanks + 1, particleKeys.size());
+    for (int rank = 0; rank < numRanks; ++rank)
     {
-        SendManifest& manifest = ret[rank];
-
         KeyType rangeStart = treeLeaves[assignment.firstNodeIdx(rank)];
-        KeyType rangeEnd   = treeLeaves[assignment.lastNodeIdx(rank)];
-
-        auto lit                     = std::lower_bound(particleKeys.begin(), particleKeys.end(), rangeStart);
-        IndexType lowerParticleIndex = std::distance(particleKeys.begin(), lit);
-
-        auto uit = std::lower_bound(particleKeys.begin() + lowerParticleIndex, particleKeys.end(), rangeEnd);
-        IndexType upperParticleIndex = std::distance(particleKeys.begin(), uit);
-
-        manifest.addRange(lowerParticleIndex, upperParticleIndex);
+        particleLocations[rank] =
+            std::lower_bound(particleKeys.begin(), particleKeys.end(), rangeStart) - particleKeys.begin();
+    }
+    for (int rank = 0; rank < numRanks; ++rank)
+    {
+        ret[rank].addRange(particleLocations[rank], particleLocations[rank + 1]);
     }
 
     return ret;
-}
-
-/*! @brief extract elements from the source array through the ordering
- *
- * @param manifest        contains the index ranges of @p source to put into the send buffer
- * @param source          e.g. x,y,z,h arrays
- * @param ordering        the space curve ordering to handle unsorted source arrays
- * @param dest            write buffer for extracted elements
- * @param bytesPerElement size of each element of source and dest in bytes
- */
-template<class IndexType>
-void extractRange(
-    const SendManifest& manifest, const char* source, const IndexType* ordering, char* dest, size_t bytesPerElement)
-{
-    size_t byteCounter = 0;
-    for (std::size_t rangeIndex = 0; rangeIndex < manifest.nRanges(); ++rangeIndex)
-    {
-        for (IndexType i = manifest.rangeStart(rangeIndex); i < IndexType(manifest.rangeEnd(rangeIndex)); ++i)
-        {
-            memcpy(dest + byteCounter, source + ordering[i] * bytesPerElement, bytesPerElement);
-            byteCounter += bytesPerElement;
-        }
-    }
 }
 
 } // namespace cstone

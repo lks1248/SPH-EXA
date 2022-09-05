@@ -31,6 +31,7 @@
 
 #include <thrust/device_vector.h>
 
+#include "cstone/util/reallocate.hpp"
 #include "multipole_holder.cuh"
 #include "ryoanji/nbody/cartesian_qpole.hpp"
 #include "ryoanji/nbody/gpu_config.cuh"
@@ -54,7 +55,7 @@ public:
     Impl() {}
 
     void upsweep(const Tc* x, const Tc* y, const Tc* z, const Tm* m, const cstone::Octree<KeyType>& globalOctree,
-                 const cstone::FocusedOctree<KeyType, Tf>& focusTree, const cstone::LocalIndex* layout,
+                 const cstone::FocusedOctree<KeyType, Tf, cstone::GpuTag>& focusTree, const cstone::LocalIndex* layout,
                  MType* multipoles)
     {
         constexpr int                  numThreads = UpsweepConfig::numThreads;
@@ -138,7 +139,7 @@ public:
 
         LocalIndex poolSize = TravConfig::memPerWarp * numWarpsPerBlock * numBlocks;
 
-        reallocate(globalPool_, poolSize, 1.05);
+        reallocateGeneric(globalPool_, poolSize, 1.05);
         traverse<<<numBlocks, TravConfig::numThreads>>>(
             firstBody, lastBody, {1, 9}, x, y, z, m, h, rawPtr(childOffsets_.data()), rawPtr(internalToLeaf_.data()),
             rawPtr(layout_.data()), rawPtr(centers_.data()), rawPtr(multipoles_.data()), G, (int*)(nullptr), ax, ay, az,
@@ -157,14 +158,14 @@ private:
         size_t numNodes = numLeaves + (numLeaves - 1) / 7;
 
         double growthRate = 1.05;
-        reallocate(leafToInternal_, numLeaves, growthRate);
-        reallocate(internalToLeaf_, numNodes, growthRate);
-        reallocate(childOffsets_, numNodes, growthRate);
+        reallocateGeneric(leafToInternal_, numLeaves, growthRate);
+        reallocateGeneric(internalToLeaf_, numNodes, growthRate);
+        reallocateGeneric(childOffsets_, numNodes, growthRate);
 
-        reallocate(layout_, numLeaves + 1, growthRate);
+        reallocateGeneric(layout_, numLeaves + 1, growthRate);
 
-        reallocate(centers_, numNodes, growthRate);
-        reallocate(multipoles_, numNodes, growthRate);
+        reallocateGeneric(centers_, numNodes, growthRate);
+        reallocateGeneric(multipoles_, numNodes, growthRate);
     }
 
     thrust::device_vector<TreeNodeIndex> leafToInternal_;
@@ -189,10 +190,9 @@ template<class Tc, class Tm, class Tf, class KeyType, class MType>
 MultipoleHolder<Tc, Tm, Tf, KeyType, MType>::~MultipoleHolder() = default;
 
 template<class Tc, class Tm, class Tf, class KeyType, class MType>
-void MultipoleHolder<Tc, Tm, Tf, KeyType, MType>::upsweep(const Tc* x, const Tc* y, const Tc* z, const Tm* m,
-                                                          const cstone::Octree<KeyType>&            globalTree,
-                                                          const cstone::FocusedOctree<KeyType, Tf>& focusTree,
-                                                          const LocalIndex* layout, MType* multipoles)
+void MultipoleHolder<Tc, Tm, Tf, KeyType, MType>::upsweep(
+    const Tc* x, const Tc* y, const Tc* z, const Tm* m, const cstone::Octree<KeyType>& globalTree,
+    const cstone::FocusedOctree<KeyType, Tf, cstone::GpuTag>& focusTree, const LocalIndex* layout, MType* multipoles)
 {
     impl_->upsweep(x, y, z, m, globalTree, focusTree, layout, multipoles);
 }
