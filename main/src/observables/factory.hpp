@@ -132,6 +132,8 @@ std::unique_ptr<IObservables<Dataset>> observablesFactory(const std::string& tes
         return std::make_unique<WindBubble<Dataset>>(constantsFile, rhoInt, uExt, bubbleMass);
     }
 
+    if (testCase == "kelvin-helmholtz") { return std::make_unique<TimeEnergyGrowth<Dataset>>(constantsFile); }
+
     return std::make_unique<TimeAndEnergy<Dataset>>(constantsFile);
 }
 
