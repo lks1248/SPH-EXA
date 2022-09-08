@@ -54,6 +54,9 @@ class DeviceParticlesData : public FieldStates<DeviceParticlesData<T, KeyType>>
     template<class FType>
     using DevVector = thrust::device_vector<FType>;
 
+    using Tmass   = float;
+    using XM1Type = float;
+
 public:
     // number of CUDA streams to use
     static constexpr int NST = 2;
@@ -73,7 +76,8 @@ public:
      * The length of these arrays equals the local number of particles including halos
      * if the field is active and is zero if the field is inactive.
      */
-    DevVector<T>        x, y, z, x_m1, y_m1, z_m1;    // Positions
+    DevVector<T>        x, y, z;                      // Positions
+    DevVector<XM1Type>  x_m1, y_m1, z_m1;             // Difference to previous positions
     DevVector<T>        vx, vy, vz;                   // Velocities
     DevVector<T>        rho;                          // Density
     DevVector<T>        temp;                         // Temperature
@@ -81,13 +85,13 @@ public:
     DevVector<T>        p;                            // Pressure
     DevVector<T>        prho;                         // p / (kx * m^2 * gradh)
     DevVector<T>        h;                            // Smoothing Length
-    DevVector<T>        m;                            // Mass
+    DevVector<Tmass>    m;                            // Mass
     DevVector<T>        c;                            // Speed of sound
     DevVector<T>        cv;                           // Specific heat
     DevVector<T>        mue, mui;                     // mean molecular weight (electrons, ions)
     DevVector<T>        divv, curlv;                  // Div(velocity), Curl(velocity)
     DevVector<T>        ax, ay, az;                   // acceleration
-    DevVector<T>        du, du_m1;                    // energy rate of change (du/dt)
+    DevVector<XM1Type>  du, du_m1;                    // energy rate of change (du/dt)
     DevVector<T>        c11, c12, c13, c22, c23, c33; // IAD components
     DevVector<T>        alpha;                        // AV coeficient
     DevVector<T>        xm;                           // Volume element definition

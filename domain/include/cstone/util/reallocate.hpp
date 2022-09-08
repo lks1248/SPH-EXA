@@ -34,6 +34,9 @@
 template<class Vector>
 extern void reallocateDevice(Vector&, size_t, double);
 
+template<class Vector>
+extern void reallocateDeviceShrink(Vector&, size_t, double, double);
+
 //! @brief resizes a vector with a determined growth rate upon reallocation
 template<class Vector>
 void reallocateGeneric(Vector& vector, size_t size, double growthRate)
@@ -60,6 +63,18 @@ void reallocate(Vector& vector, size_t size, double growthRate)
     reallocateGeneric(vector, size, growthRate);
 }
 
+//! @brief if reallocation of the underlying buffer is necessary, first deallocate it
+template<class Vector>
+void reallocateDestructive(Vector& vector, size_t size, double growthRate)
+{
+    if (size > vector.capacity())
+    {
+        // swap with an empty temporary to force deallocation
+        Vector().swap(vector);
+    }
+    reallocate(vector, size, growthRate);
+}
+
 template<class... Arrays>
 void reallocate(std::size_t size, Arrays&... arrays)
 {
@@ -83,3 +98,34 @@ size_t reallocateBytes(Vector& vec, size_t numBytes)
 
     return originalSize;
 }
+
+template<class Vector>
+size_t reallocateBytesDestructive(Vector& vec, size_t numBytes)
+{
+    constexpr size_t elementSize = sizeof(typename Vector::value_type);
+    size_t originalSize          = vec.size();
+
+    size_t currentSizeBytes = originalSize * elementSize;
+    if (currentSizeBytes < numBytes) { reallocateDestructive(vec, (numBytes + elementSize - 1) / elementSize, 1.01); }
+
+    return originalSize;
+}
+
+//! @brief reallocate memory by first deallocating all scratch to reduce fragmentation and decrease temp mem footprint
+template<class... Vectors1, class... Vectors2>
+void lowMemReallocate(size_t size,
+                      double growthFactor,
+                      std::tuple<Vectors1&...> conserved,
+                      std::tuple<Vectors2&...> scratch)
+{
+    // if the new size exceeds capacity, we first deallocate all scratch buffers to make space for the reallocations
+    for_each_tuple(
+        [size](auto& v)
+        {
+            if (size > v.capacity()) { std::decay_t<decltype(v)>{}.swap(v); }
+        },
+        scratch);
+    for_each_tuple([size, growthFactor](auto& v) { reallocate(v, size, growthFactor); }, conserved);
+    for_each_tuple([size, growthFactor](auto& v) { reallocate(v, size, growthFactor); }, scratch);
+}
+

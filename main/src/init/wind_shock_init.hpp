@@ -115,9 +115,9 @@ void initWindShockFields(Dataset& d, const std::map<std::string, double>& consta
             d.vz[i] = 0.;
         }
 
-        d.x_m1[i] = d.x[i] - d.vx[i] * firstTimeStep;
-        d.y_m1[i] = d.y[i] - d.vy[i] * firstTimeStep;
-        d.z_m1[i] = d.z[i] - d.vz[i] * firstTimeStep;
+        d.x_m1[i] = d.vx[i] * firstTimeStep;
+        d.y_m1[i] = d.vy[i] * firstTimeStep;
+        d.z_m1[i] = d.vz[i] * firstTimeStep;
     }
 }
 
@@ -159,7 +159,6 @@ public:
         T rSphere = constants_.at("rSphere");
         T rhoInt  = constants_.at("rhoInt");
         T rhoExt  = constants_.at("rhoExt");
-        T epsilon = constants_.at("epsilon");
 
         T densityRatio   = rhoInt / rhoExt;
         T cubeVolume     = std::pow(2 * r, 3);
@@ -171,16 +170,12 @@ public:
 
         size_t multiplicity = std::rint(cbrtNumPart / std::cbrt(blockSize));
 
-        cstone::Box<T> globalBox(0, 8 * r, 0, 2 * r, 0, 2 * r, cstone::BoundaryType::periodic,
-                                 cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
-        cstone::Box<T> boxA(0, 2 * r, 0, 2 * r, 0, 2 * r, cstone::BoundaryType::periodic,
-                            cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
-        cstone::Box<T> boxB(2 * r, 4 * r, 0, 2 * r, 0, 2 * r, cstone::BoundaryType::periodic,
-                            cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
-        cstone::Box<T> boxC(4 * r, 6 * r, 0, 2 * r, 0, 2 * r, cstone::BoundaryType::periodic,
-                            cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
-        cstone::Box<T> boxD(6 * r, 8 * r, 0, 2 * r, 0, 2 * r, cstone::BoundaryType::periodic,
-                            cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
+        auto           pbc = cstone::BoundaryType::periodic;
+        cstone::Box<T> globalBox(0, 8 * r, 0, 2 * r, 0, 2 * r, pbc, pbc, pbc);
+        cstone::Box<T> boxA(0, 2 * r, 0, 2 * r, 0, 2 * r, pbc, pbc, pbc);
+        cstone::Box<T> boxB(2 * r, 4 * r, 0, 2 * r, 0, 2 * r, pbc, pbc, pbc);
+        cstone::Box<T> boxC(4 * r, 6 * r, 0, 2 * r, 0, 2 * r, pbc, pbc, pbc);
+        cstone::Box<T> boxD(6 * r, 8 * r, 0, 2 * r, 0, 2 * r, pbc, pbc, pbc);
 
         auto [keyStart, keyEnd] = partitionRange(cstone::nodeRange<KeyType>(0), rank, numRanks);
         assembleCube<T>(keyStart, keyEnd, boxA, multiplicity, xBlock, yBlock, zBlock, d.x, d.y, d.z);

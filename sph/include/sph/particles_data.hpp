@@ -53,12 +53,14 @@
 namespace sphexa
 {
 
-template<typename T, typename I, class AccType>
-class ParticlesData : public FieldStates<ParticlesData<T, I, AccType>>
+template<typename T, typename KeyType_, class AccType>
+class ParticlesData : public FieldStates<ParticlesData<T, KeyType_, AccType>>
 {
 public:
+    using KeyType         = KeyType_;
     using RealType        = T;
-    using KeyType         = I;
+    using Tmass           = float;
+    using XM1Type         = float;
     using AcceleratorType = AccType;
 
     template<class ValueType>
@@ -93,7 +95,8 @@ public:
      * The length of these arrays equals the local number of particles including halos
      * if the field is active and is zero if the field is inactive.
      */
-    FieldVector<T>        x, y, z, x_m1, y_m1, z_m1;    // Positions
+    FieldVector<T>        x, y, z;                      // Positions
+    FieldVector<XM1Type>  x_m1, y_m1, z_m1;             // Difference between current and previous positions
     FieldVector<T>        vx, vy, vz;                   // Velocities
     FieldVector<T>        rho;                          // Density
     FieldVector<T>        temp;                         // Temperature
@@ -101,13 +104,13 @@ public:
     FieldVector<T>        p;                            // Pressure
     FieldVector<T>        prho;                         // p / (kx * m^2 * gradh)
     FieldVector<T>        h;                            // Smoothing Length
-    FieldVector<T>        m;                            // Mass
+    FieldVector<Tmass>    m;                            // Mass
     FieldVector<T>        c;                            // Speed of sound
     FieldVector<T>        cv;                           // Specific heat
     FieldVector<T>        mue, mui;                     // mean molecular weight (electrons, ions)
     FieldVector<T>        divv, curlv;                  // Div(velocity), Curl(velocity)
     FieldVector<T>        ax, ay, az;                   // acceleration
-    FieldVector<T>        du, du_m1;                    // energy rate of change (du/dt)
+    FieldVector<XM1Type>  du, du_m1;                    // energy rate of change (du/dt)
     FieldVector<T>        c11, c12, c13, c22, c23, c33; // IAD components
     FieldVector<T>        alpha;                        // AV coeficient
     FieldVector<T>        xm;                           // Volume element definition

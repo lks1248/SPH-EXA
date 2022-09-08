@@ -84,9 +84,9 @@ void initEvrardFields(Dataset& d, const std::map<std::string, double>& constants
         T concentration = c0 / radius;
         d.h[i]          = std::cbrt(3 / (4 * M_PI) * ng0 / concentration) * 0.5;
 
-        d.x_m1[i] = d.x[i] - d.vx[i] * firstTimeStep;
-        d.y_m1[i] = d.y[i] - d.vy[i] * firstTimeStep;
-        d.z_m1[i] = d.z[i] - d.vz[i] * firstTimeStep;
+        d.x_m1[i] = d.vx[i] * firstTimeStep;
+        d.y_m1[i] = d.vy[i] * firstTimeStep;
+        d.z_m1[i] = d.vz[i] * firstTimeStep;
     }
 }
 
@@ -134,8 +134,10 @@ public:
         size_t                    bucketSize = std::max(64lu, d.numParticlesGlobal / (100 * numRanks));
         cstone::BufferDescription bufDesc{0, cstone::LocalIndex(d.x.size()), cstone::LocalIndex(d.x.size())};
 
-        cstone::GlobalAssignment<KeyType, T>           distributor(rank, numRanks, bucketSize, globalBox);
-        cstone::CpuGather<KeyType, cstone::LocalIndex> reorderFunctor;
+        cstone::GlobalAssignment<KeyType, T> distributor(rank, numRanks, bucketSize, globalBox);
+
+        std::vector<unsigned>                                        orderScratch;
+        cstone::SfcSorter<cstone::LocalIndex, std::vector<unsigned>> reorderFunctor(orderScratch);
 
         std::vector<T>       scratch1, scratch2;
         std::vector<KeyType> particleKeys(d.x.size());
