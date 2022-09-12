@@ -311,6 +311,7 @@ public:
                   std::tuple<Vectors2&...> scratchBuffers)
     {
         staticChecks<KeyVec, VectorX, VectorH, VectorM, Vectors1...>(scratchBuffers);
+        timer_.start();
         auto& sfcOrder = std::get<sizeof...(Vectors2) - 1>(scratchBuffers);
         using ReorderFunctor_t =
             typename AccelSwitchType<Accelerator, SfcSorter,
@@ -318,13 +319,16 @@ public:
         ReorderFunctor_t reorderer(sfcOrder);
 
         auto scratch = discardLastElement(scratchBuffers);
+        timer_.step("domain::prolog");
 
         auto [exchangeStart, keyView] =
             distribute(reorderer, particleKeys, x, y, z, std::tuple_cat(std::tie(h, m), particleProperties), scratch);
         reorderArrays(reorderer, exchangeStart, 0, std::tie(x, y, z, h, m), scratch);
+        timer_.step("domain::first_reorder");
 
         float invThetaEff      = invThetaVecMac(theta_);
         std::vector<int> peers = findPeersMac(myRank_, global_.assignment(), global_.octree(), box(), invThetaEff);
+        timer_.step("domain::find_peers");
 
         if (firstCall_)
         {
@@ -341,24 +345,34 @@ public:
             }
         }
         focusTree_.updateMinMac(box(), global_.assignment(), global_.treeLeaves(), invThetaEff);
+        timer_.step("domain::focus_tree_min_mac");
         focusTree_.updateTree(peers, global_.assignment(), global_.treeLeaves());
+        timer_.step("domain::focus_tree");
         focusTree_.updateCounts(keyView, global_.treeLeaves(), global_.nodeCounts(), std::get<0>(scratch));
+        timer_.step("domain::focus_counts");
         focusTree_.updateCenters(rawPtr(x), rawPtr(y), rawPtr(z), rawPtr(m), global_.assignment(), global_.octree(),
                                  box(), std::get<0>(scratch), std::get<1>(scratch));
+        timer_.step("domain::focus_centers");
         focusTree_.updateMacs(box(), global_.assignment(), global_.treeLeaves());
+        timer_.step("domain::focus_macs");
 
         reallocate(layout_, nNodes(focusTree_.treeLeaves()) + 1, 1.01);
         halos_.discover(focusTree_.octree(), focusTree_.leafCounts(), focusTree_.assignment(), layout_, box(),
                         rawPtr(h), std::get<0>(scratch));
+        timer_.step("domain::halo_discover");
         focusTree_.addMacs(halos_.haloFlags());
         halos_.computeLayout(focusTree_.treeLeaves(), focusTree_.leafCounts(), focusTree_.assignment(), peers, layout_);
+        timer_.step("domain::halo_layout");
 
         // diagnostics(keyView.size(), peers);
 
         updateLayout(reorderer, exchangeStart, keyView, particleKeys, std::tie(x, y, z, h, m), particleProperties,
                      scratch);
+        timer_.step("domain::reorder");
         setupHalos(particleKeys, x, y, z, h, scratch);
+        timer_.step("domain::halo_exchange");
         firstCall_ = false;
+        timer_.stop();
     }
 
     //! @brief repeat the halo exchange pattern from the previous sync operation for a different set of arrays
