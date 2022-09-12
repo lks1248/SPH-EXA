@@ -139,8 +139,30 @@ public:
                           dataTuple());
     }
 
+    void stats()
+    {
+        auto   data_ = data();
+        size_t sum   = 0;
+        for (size_t i = 0; i < data_.size(); ++i)
+        {
+            std::visit(
+                [name = fieldNames[i], &sum](auto* v)
+                {
+                    using VType = std::decay_t<decltype(*v)>;
+                    if (v->capacity())
+                    {
+                        printf("%5s: %lu %lu %lu\n", name, v->size(), v->capacity(), sizeof(typename VType::value_type));
+                        sum += v->capacity() * sizeof(typename VType::value_type);
+                    }
+                },
+                data_[i]);
+        }
+        std::cout << "Total MB: " << sum / 1024 / 1024 << std::endl;
+    }
+
     void resize(size_t size)
     {
+        stats();
         double growthRate = 1.01;
         auto   data_      = data();
 
