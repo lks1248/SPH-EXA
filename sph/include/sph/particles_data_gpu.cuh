@@ -162,7 +162,7 @@ public:
 
     void resize(size_t size)
     {
-        stats();
+        // stats();
         double growthRate = 1.01;
         auto   data_      = data();
 
