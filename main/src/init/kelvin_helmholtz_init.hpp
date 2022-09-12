@@ -63,6 +63,7 @@ void initKelvinHelmholtzFields(Dataset& d, const std::map<std::string, double>& 
 
     std::fill(d.m.begin(), d.m.end(), massPart);
     std::fill(d.du_m1.begin(), d.du_m1.end(), 0.0);
+    std::fill(d.mue.begin(), d.mue.end(), 2.0);
     std::fill(d.mui.begin(), d.mui.end(), 10.0);
     std::fill(d.alpha.begin(), d.alpha.end(), d.alphamin);
     std::fill(d.vz.begin(), d.vz.end(), 0.0);
@@ -73,9 +74,13 @@ void initKelvinHelmholtzFields(Dataset& d, const std::map<std::string, double>& 
 #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < d.x.size(); i++)
     {
+        d.x[i] /= 16.;
+        d.y[i] /= 16.;
+        d.z[i] /= 16.;
+
         d.vy[i] = omega0 * std::sin(4 * M_PI * d.x[i]);
 
-        if (d.y[i] < 12. && d.y[i] > 4.)
+        if (d.y[i] < .75 && d.y[i] > .25)
         {
             d.h[i]  = hInt;
             d.u[i]  = uInt;
@@ -88,9 +93,9 @@ void initKelvinHelmholtzFields(Dataset& d, const std::map<std::string, double>& 
             d.vx[i] = vxExt;
         }
 
-        d.x_m1[i] = d.x[i] - d.vx[i] * firstTimeStep;
-        d.y_m1[i] = d.y[i] - d.vy[i] * firstTimeStep;
-        d.z_m1[i] = d.z[i] - d.vz[i] * firstTimeStep;
+        d.x_m1[i] = d.vx[i] * firstTimeStep;
+        d.y_m1[i] = d.vy[i] * firstTimeStep;
+        d.z_m1[i] = d.vz[i] * firstTimeStep;
     }
 }
 
@@ -197,7 +202,7 @@ public:
         fileutils::readTemplateBlock(glassBlock, xBlock, yBlock, zBlock);
         size_t blockSize = xBlock.size();
 
-        cstone::Box<T> globalBox(0, 16, 0, 16, 0, 1, cstone::BoundaryType::periodic, cstone::BoundaryType::periodic,
+        cstone::Box<T> globalBox(0,  1, 0, 1, 0, 0.0625, cstone::BoundaryType::periodic, cstone::BoundaryType::periodic,
                                  cstone::BoundaryType::periodic);
         auto [keyStart, keyEnd] = partitionRange(cstone::nodeRange<KeyType>(0), rank, numRanks);
 
@@ -205,7 +210,7 @@ public:
         assembleKelvinHelmholtz(xBlock, yBlock, zBlock, xHalf, yHalf, zHalf, d, keyStart, keyEnd, constants_);
 
         size_t npartInner   = 128 * xBlock.size();
-        T      volumeHD     = 16. * 8.;
+        T      volumeHD     = 0.5 * 0.0625;
         T      particleMass = volumeHD * rhoInt / npartInner;
 
         size_t totalNPart = 128 * (xBlock.size() + xHalf.size());
