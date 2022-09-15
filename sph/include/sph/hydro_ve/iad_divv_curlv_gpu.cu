@@ -45,9 +45,9 @@ namespace cuda
 template<class Tc, class T, class KeyType>
 __global__ void iadDivvCurlvGpu(T sincIndex, T K, unsigned ngmax, const cstone::Box<Tc> box, size_t first, size_t last,
                                 size_t numParticles, const KeyType* particleKeys, const Tc* x, const Tc* y, const Tc* z,
-                                const T* vx, const T* vy, const T* vz, const T* h, const T* wh,
-                                const T* whd, const T* xm, const T* kx, T* c11, T* c12, T* c13, T* c22, T* c23, T* c33,
-                                T* divv, T* curlv)
+                                const T* vx, const T* vy, const T* vz, const T* h, const T* wh, const T* whd,
+                                const T* xm, const T* kx, T* c11, T* c12, T* c13, T* c22, T* c23, T* c33, T* divv,
+                                T* curlv)
 {
     cstone::LocalIndex tid = blockDim.x * blockIdx.x + threadIdx.x;
     cstone::LocalIndex i   = tid + first;
@@ -91,7 +91,7 @@ void computeIadDivvCurlv(size_t startIndex, size_t endIndex, unsigned ngmax, Dat
         rawPtr(d.devData.h), rawPtr(d.devData.wh), rawPtr(d.devData.whd), rawPtr(d.devData.xm), rawPtr(d.devData.kx),
         rawPtr(d.devData.c11), rawPtr(d.devData.c12), rawPtr(d.devData.c13), rawPtr(d.devData.c22),
         rawPtr(d.devData.c23), rawPtr(d.devData.c33), rawPtr(d.devData.divv), rawPtr(d.devData.curlv));
-    checkGpuErrors(cudaGetLastError());
+    checkGpuErrors(cudaDeviceSynchronize());
 }
 
 template void computeIadDivvCurlv(size_t, size_t, unsigned, sphexa::ParticlesData<double, unsigned, cstone::GpuTag>& d,
