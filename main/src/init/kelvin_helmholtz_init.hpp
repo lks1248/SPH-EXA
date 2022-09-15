@@ -56,6 +56,8 @@ void initKelvinHelmholtzFields(Dataset& d, const std::map<std::string, double>& 
 
     T uInt = p / ((gamma - 1.) * rhoInt);
     T uExt = p / ((gamma - 1.) * rhoExt);
+    T vDif = 0.5 * (vxExt - vxInt);
+    T ls   = 0.025;
 
     size_t ng0  = 100;
     T      hInt = 0.5 * std::cbrt(3. * ng0 * massPart / 4. / M_PI / rhoInt);
@@ -80,17 +82,31 @@ void initKelvinHelmholtzFields(Dataset& d, const std::map<std::string, double>& 
 
         d.vy[i] = omega0 * std::sin(4 * M_PI * d.x[i]);
 
-        if (d.y[i] < .75 && d.y[i] > .25)
+        if (d.y[i] < 0.75 && d.y[i] > 0.25)
         {
             d.h[i]  = hInt;
             d.u[i]  = uInt;
-            d.vx[i] = vxInt;
+            if(d.y[i] > 0.5)
+            {
+                d.vx[i] = vxInt + vDif * std::exp((d.y[i] - 0.75) / ls);
+            }
+            else
+            {
+                d.vx[i] = vxInt + vDif * std::exp((0.25 - d.y[i]) / ls);
+            }
         }
         else
         {
             d.h[i]  = hExt;
             d.u[i]  = uExt;
-            d.vx[i] = vxExt;
+            if(d.y[i] < 0.25)
+            {
+                d.vx[i] = vxExt - vDif * std::exp((d.y[i] - 0.25) / ls);
+            }
+            else
+            {
+                d.vx[i] = vxExt - vDif * std::exp((0.75 - d.y[i]) / ls);
+            }
         }
 
         d.x_m1[i] = d.vx[i] * firstTimeStep;
