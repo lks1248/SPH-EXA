@@ -88,7 +88,6 @@ T computeKHGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, const csto
         throw std::runtime_error("kx was empty. KHGrowthRate only supported with volume elements (--prop ve)\n");
     }
 
-    transferToHost(d, startIndex, endIndex, {"x", "y", "vy", "kx", "xm"});
 
     std::array<T, 3> localSum =
         localGrowthRate(startIndex, endIndex, d.x.data(), d.y.data(), d.vy.data(), d.xm.data(), d.kx.data(), box);
@@ -117,6 +116,7 @@ public:
     void computeAndWrite(Dataset& d, size_t firstIndex, size_t lastIndex, cstone::Box<T>& box)
     {
         computeConservedQuantities(firstIndex, lastIndex, d);
+        transferToHost(d, firstIndex, lastIndex, {"x", "y", "vy", "kx", "xm"});
         T khgr = computeKHGrowthRate<T>(firstIndex, lastIndex, d, box);
 
         int rank;
