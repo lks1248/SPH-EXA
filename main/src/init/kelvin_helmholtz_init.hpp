@@ -67,7 +67,7 @@ void initKelvinHelmholtzFields(Dataset& d, const std::map<std::string, double>& 
     std::fill(d.du_m1.begin(), d.du_m1.end(), 0.0);
     std::fill(d.mue.begin(), d.mue.end(), 2.0);
     std::fill(d.mui.begin(), d.mui.end(), 10.0);
-    std::fill(d.alpha.begin(), d.alpha.end(), d.alphamin);
+    std::fill(d.alpha.begin(), d.alpha.end(), d.alphamax);
     std::fill(d.vz.begin(), d.vz.end(), 0.0);
 
     d.minDt    = firstTimeStep;
