@@ -144,7 +144,7 @@ int main(int argc, char** argv)
         {
             propagator->step(domain, d);
             propagator->prepareOutput(d, domain.startIndex(), domain.endIndex(), box);
-            //transferToHost(d, domain.startIndex(), domain.endIndex(), {"gradh", "xm", "y", "u", "h"});
+            transferToHost(d, domain.startIndex(), domain.endIndex(), {"gradh", "xm", "y", "u", "h"});
             Real p = KelvinHelmholtzConstants().at("p");
             Real rhoInt = KelvinHelmholtzConstants().at("rhoInt");
             Real rhoExt = KelvinHelmholtzConstants().at("rhoExt");
