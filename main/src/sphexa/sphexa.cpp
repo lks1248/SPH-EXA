@@ -143,8 +143,8 @@ int main(int argc, char** argv)
         if (d.iteration <= 10)
         {
             propagator->step(domain, d);
-            propagator->prepareOutput(d, domain.startIndex(), domain.endIndex(), box);
-            transferToHost(d, domain.startIndex(), domain.endIndex(), {"gradh", "xm", "y", "u", "h"});
+            propagator->prepareOutput(d, 0, d.x.size(), box);
+            transferToHost(d, 0, d.x.size(), {"gradh", "xm", "y", "u", "h"});
             Real p = KelvinHelmholtzConstants().at("p");
             Real rhoInt = KelvinHelmholtzConstants().at("rhoInt");
             Real rhoExt = KelvinHelmholtzConstants().at("rhoExt");
@@ -174,7 +174,7 @@ int main(int argc, char** argv)
                 }
 
             }
-            transferToDevice(d, domain.startIndex(), domain.endIndex(), {"gradh", "xm", "u", "h"});
+            transferToDevice(d, 0, d.x.size(), {"gradh", "xm", "u", "h"});
             propagator->finishOutput(d);
 
         }
