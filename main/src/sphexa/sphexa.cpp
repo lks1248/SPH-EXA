@@ -140,7 +140,7 @@ int main(int argc, char** argv)
     size_t startIteration = d.iteration;
     for (; !stopSimulation(d.iteration - 1, d.ttot, maxStepStr); d.iteration++)
     {
-        if (d.iteration < 10)
+        if (d.iteration <= 10)
         {
             propagator->step(domain, d);
             propagator->prepareOutput(d, domain.startIndex(), domain.endIndex(), box);
