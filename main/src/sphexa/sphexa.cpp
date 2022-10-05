@@ -162,7 +162,7 @@ int main(int argc, char** argv)
                 d.gradh[i] = 1.;
                 d.xm[i] = d.m[i];
 
-                if (d.y[i] > 0.25 || d.y[i] < 0.75)
+                if (d.y[i] > 0.25 && d.y[i] < 0.75)
                 {
                     d.u[i] = uInt;
                     d.h[i] = hInt;
