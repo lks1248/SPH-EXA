@@ -29,6 +29,7 @@
  * @author Ruben Cabezon <ruben.cabezon@unibas.ch>
  * @author Jose A. Escartin <ja.escartin@gmail.com>
  * @author Sebastian Keller <sebastian.f.keller@gmail.com>
+ * @author Lukas Schmidt
  *
  */
 
