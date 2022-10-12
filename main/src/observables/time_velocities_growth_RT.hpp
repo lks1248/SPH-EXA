@@ -36,6 +36,7 @@
 #include <mpi.h>
 #include <vector>
 #include <numeric>
+#include <algorithm>
 
 #include "conserved_quantities.hpp"
 #include "iobservables.hpp"
@@ -54,7 +55,8 @@ struct AuxT
     T vel;
 };
 
-typedef std::vector<AuxT> vAuxT;
+//template<class T>
+//typedef std::vector<sphexa::AuxT<T>> vAuxT;
 
 struct greaterRT
 {
@@ -77,21 +79,20 @@ template<class AuxT, class T> bool operator()(AuxT const &a, AuxT const &b) cons
  * with higher radius. Sort function uses greater to sort in reverse order so
  * that we can benefit from resize to cut the vectors down to 50.
  */
-template<class AuxT, class T> util::tuple<vAuxT, vAuxT>
-localVelocitiesRT(size_t startIndex, size_t endIndex, size_t n, const T Atmin, const T Atmax, const T ramp,
+template<class T> util::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
+localVelocitiesRT(size_t startIndex, size_t endIndex, size_t ngmax, size_t n, const T Atmin, const T Atmax, const T ramp,
         const T* y, const T* vy, const T* rho, const cstone::LocalIndex* neighbors, const unsigned* neighborsCount)
 {
+    std::vector<AuxT<T>> local_Up(n);
+    std::vector<AuxT<T>> local_Down(n);
 
-    vAuxT localUp(n);
-​    vAuxT localDown(n);
-​
 #pragma omp parallel for
     for (size_t i = startIndex; i < endIndex; i++)
     {
-        T mark_ramp = 0.0;
+        T mark_ramp = 0.;
 
         const cstone::LocalIndex* localNeighbors      = neighbors + ngmax * (i - startIndex);
-        unsigned                  localNeighborsCount = stl::min(neighborsCount[i], ngmax);
+        unsigned                  localNeighborsCount = stl::min(neighborsCount[i], T(ngmax));
 
         for (unsigned pj = 0; pj < localNeighborsCount; ++pj)
         {
@@ -110,18 +111,18 @@ localVelocitiesRT(size_t startIndex, size_t endIndex, size_t n, const T Atmin, c
         }
 
         if (mark_ramp > 0.05) {
-            localUp[i-startIndex] = {y[i], vy[i]};
-            localDown[i-startIndex] = {y[i], vy[i]};
+            local_Up[i-startIndex] = {y[i], vy[i]};
+            local_Down[i-startIndex] = {y[i], vy[i]};
         }
     }
+
+​    std::sort(local_Up.begin(), local_Up.end(), greaterRT());
+​    std::sort(local_Down.begin(), local_Down.end(), lowerRT());
 ​
-    std::sort(localUp.begin(), localUp.end(), greater());
-​    std::sort(localDown.begin(), localDown.end(), lower());
+    local_Up.resize(50);
+    local_Down.resize(50);
 ​
-    localUp.resize(50);
-    localDown.resize(50);
-​
-    return{localUp, localDown};
+    return{local_Up, local_Down};
 }
 ​
 /*! @brief global calculation of the central density and radius
@@ -135,10 +136,10 @@ localVelocitiesRT(size_t startIndex, size_t endIndex, size_t n, const T Atmin, c
  * @param[in]     box          bounding box
  */
 template<typename T, class Dataset> util::tuple<T, T>
-computeVelocitiesRT(size_t startIndex, size_t endIndex, Dataset& d, const cstone::Box<T>& box)
+computeVelocitiesRT(size_t startIndex, size_t endIndex, Dataset& d, const cstone::Box<T>& box, size_t ngmax)
 {
     auto [localUp, localDown] = localVelocitiesRT(
-        startIndex, endIndex, d.Atmin, d.Atmax, d.ramp, d.y.data(), d.vy.data(), d.prho.data(), d.neighbors.data(), d.nc.data());
+        startIndex, endIndex, ngmax, d.Atmin, d.Atmax, d.ramp, d.y.data(), d.vy.data(), d.prho.data(), d.neighbors.data(), d.nc.data());
 ​    ​
     int rootRank = 0;
     int mpiranks;
@@ -161,8 +162,8 @@ computeVelocitiesRT(size_t startIndex, size_t endIndex, Dataset& d, const cstone
     ​
     if (rank == 0)
     {
-        std::sort(globalUp.begin(), globalUp.end(), greater());
-        std::sort(globalDown.begin(), globalDown.end(), lower());
+        std::sort(globalUp.begin(), globalUp.end(), greaterRT());
+        std::sort(globalDown.begin(), globalDown.end(), lowerRT());
     ​
         globalUp.resize(50);
         globalDown.resize(50);
@@ -181,10 +182,11 @@ template<class Dataset>
 class TimeVelocitiesGrowthRT : public IObservables<Dataset>
 {
     std::ofstream& constantsFile;
+    size_t         ngmax;
 ​
 public:
-    TimeVelocitiesGrowthRT(std::ofstream& constPath)
-        : constantsFile(constPath)
+    TimeVelocitiesGrowthRT(std::ofstream& constPath, size_t ngmax)
+        : constantsFile(constPath), ngmax(ngmax)
     {
     }
 ​
@@ -192,7 +194,7 @@ public:
 ​
     void computeAndWrite(Dataset& d, size_t firstIndex, size_t lastIndex, cstone::Box<T>& box)
     {
-        auto [vy_max, vy_min] = computeVelocitiesRT(firstIndex, lastIndex, d, box);
+        auto [vy_max, vy_min] = computeVelocitiesRT(firstIndex, lastIndex, d, box, ngmax);
 
         int rank;
         MPI_Comm_rank(d.comm, &rank);

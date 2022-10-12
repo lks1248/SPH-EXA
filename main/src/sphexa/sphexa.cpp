@@ -104,7 +104,7 @@ int main(int argc, char** argv)
     auto simInit     = initializerFactory<Dataset>(initCond, glassBlock);
     auto propagator  = propagatorFactory<Domain, Dataset>(propChoice, ngmax, ng0, output, rank);
     auto fileWriter  = fileWriterFactory<Dataset>(ascii);
-    auto observables = observablesFactory<Dataset>(initCond, constantsFile);
+    auto observables = observablesFactory<Dataset>(initCond, constantsFile, ngmax);
 
     Dataset d;
     d.comm = MPI_COMM_WORLD;

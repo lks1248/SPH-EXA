@@ -93,7 +93,7 @@ static bool haveH5Attribute(const std::string& fname, const std::string& attribu
 #endif
 
 template<class Dataset>
-std::unique_ptr<IObservables<Dataset>> observablesFactory(const std::string& testCase, std::ofstream& constantsFile)
+std::unique_ptr<IObservables<Dataset>> observablesFactory(const std::string& testCase, std::ofstream& constantsFile, size_t ngmax)
 {
 #ifdef SPH_EXA_HAVE_H5PART
     std::string khGrowthRate = "KelvinHelmholtzGrowthRate";
@@ -119,7 +119,7 @@ std::unique_ptr<IObservables<Dataset>> observablesFactory(const std::string& tes
         H5PartReadFileAttrib(h5_file, rtGrowthRate.c_str(), &attrValue);
         H5PartCloseFile(h5_file);
 
-        if (attrValue) { return std::make_unique<TimeVelocitiesGrowthRT<Dataset>>(constantsFile); }
+        if (attrValue) { return std::make_unique<TimeVelocitiesGrowthRT<Dataset>>(constantsFile, ngmax); }
     }
 
     if (haveH5Attribute(testCase, gravWaves, H5PART_FLOAT64))
@@ -147,7 +147,7 @@ std::unique_ptr<IObservables<Dataset>> observablesFactory(const std::string& tes
 
     if (testCase == "KH") { return std::make_unique<TimeEnergyGrowth<Dataset>>(constantsFile); }
 
-    if (testCase == "RT") { return std::make_unique<TimeVelocitiesGrowthRT<Dataset>>(constantsFile); }
+    if (testCase == "RT") { return std::make_unique<TimeVelocitiesGrowthRT<Dataset>>(constantsFile, ngmax); }
 
     return std::make_unique<TimeAndEnergy<Dataset>>(constantsFile);
 }
