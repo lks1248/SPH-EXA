@@ -184,7 +184,8 @@ std::map<std::string, double> RayleighTaylorConstants()
             {"p0", 2.5},
             {"y0", 0.75},
             {"omega0", 0.0025},
-            {"G", 0.5}};
+            {"G", 0.5}
+    };
 }
 
 template<class Dataset>
@@ -213,7 +214,7 @@ public:
         fileutils::readTemplateBlock(glassBlock, xBlock, yBlock, zBlock);
         size_t blockSize = xBlock.size();
 
-        cstone::Box<T> globalBox(0,  1, 0, 1, 0, 0.0625, cstone::BoundaryType::periodic, cstone::BoundaryType::periodic,
+        cstone::Box<T> globalBox(0,  1, 0, 1, 0, 0.0625, cstone::BoundaryType::periodic, cstone::BoundaryType::fixed,
                                  cstone::BoundaryType::periodic);
         auto [keyStart, keyEnd] = partitionRange(cstone::nodeRange<KeyType>(0), rank, numRanks);
 
