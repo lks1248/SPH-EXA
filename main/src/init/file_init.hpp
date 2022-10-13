@@ -104,7 +104,7 @@ public:
         initField(h5_file, rank, d.vz, "vz", 0.0);
 
         initField(h5_file, rank, d.du_m1, "du_m1", 0.0);
-        initField(h5_file, rank, d.alpha, "alpha", d.alphamin);
+        initField(h5_file, rank, d.alpha, "alpha", d.alphamax);
 
         initXm1(h5_file, rank, d);
 
