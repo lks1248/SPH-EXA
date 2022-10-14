@@ -140,45 +140,7 @@ int main(int argc, char** argv)
     size_t startIteration = d.iteration;
     for (; !stopSimulation(d.iteration - 1, d.ttot, maxStepStr); d.iteration++)
     {
-        if (d.iteration <= 10)
-        {
-            propagator->step(domain, d);
-            d.release("c11");
-            d.acquire("gradh");
-            Real p      = KelvinHelmholtzConstants().at("p");
-            Real rhoInt = KelvinHelmholtzConstants().at("rhoInt");
-            Real rhoExt = KelvinHelmholtzConstants().at("rhoExt");
-            Real gamma  = KelvinHelmholtzConstants().at("gamma");
-            Real uInt   = p / ((gamma - 1.) * rhoInt);
-            Real uExt   = p / ((gamma - 1.) * rhoExt);
-
-            Real particleMass = d.m[0];
-            Real hInt         = 0.5 * std::cbrt(3. * ng0 * particleMass / 4. / M_PI / rhoInt);
-            Real hExt         = 0.5 * std::cbrt(3. * ng0 * particleMass / 4. / M_PI / rhoExt);
-
-#pragma omp parallel for schedule(static)
-            for (size_t i = 0; i < d.x.size(); ++i)
-            {
-                d.gradh[i] = 1.;
-                //d.xm[i]    = d.m[i]; //seems to mess with rho
-
-                if (d.y[i] > 0.25 && d.y[i] < 0.75)
-                {
-                    d.u[i] = uInt;
-                    d.h[i] = hInt;
-                }
-                else
-                {
-                    d.u[i] = uExt;
-                    d.h[i] = hExt;
-                }
-            }
-            transferToDevice(d, 0, d.x.size(), {"gradh", "u", "h"});
-            d.release("gradh");
-            d.acquire("c11");
-
-        }
-        else { propagator->step(domain, d); }
+        propagator->step(domain, d);
 
         observables->computeAndWrite(d, domain.startIndex(), domain.endIndex(), box);
         propagator->printIterationTimings(domain, d);
