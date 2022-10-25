@@ -168,12 +168,13 @@ H5PartFile* openH5Part(const std::string& path, h5part_int64_t mode, MPI_Comm co
 }
 
 template<class Dataset, class T>
-void writeH5Part(Dataset& d, size_t firstIndex, size_t lastIndex, const cstone::Box<T>& box, const std::string& path)
+void writeH5Part(Dataset& d, size_t firstIndex, size_t lastIndex, const cstone::Box<T>& box, const std::string& path,
+                 MPI_Comm comm)
 {
     H5PartFile* h5_file = nullptr;
 
-    if (std::filesystem::exists(path)) { h5_file = openH5Part(path, H5PART_APPEND, d.comm); }
-    else { h5_file = openH5Part(path, H5PART_WRITE, d.comm); }
+    if (std::filesystem::exists(path)) { h5_file = openH5Part(path, H5PART_APPEND, comm); }
+    else { h5_file = openH5Part(path, H5PART_WRITE, comm); }
 
     // create the next step
     h5part_int64_t numSteps = H5PartGetNumSteps(h5_file);
@@ -184,6 +185,7 @@ void writeH5Part(Dataset& d, size_t firstIndex, size_t lastIndex, const cstone::
     sphexaWriteStepAttrib(h5_file, "minDt_m1", &d.minDt_m1, 1);
     sphexaWriteStepAttrib(h5_file, "gravConstant", &d.g, 1);
     sphexaWriteStepAttrib(h5_file, "gamma", &d.gamma, 1);
+    sphexaWriteStepAttrib(h5_file, "muiConst", &d.muiConst, 1);
     // record the actual SPH-iteration as step attribute
     H5PartWriteStepAttrib(h5_file, "step", H5PART_INT64, &d.iteration, 1);
 
