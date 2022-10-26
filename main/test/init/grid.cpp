@@ -44,8 +44,8 @@ TEST(Grids, intersect)
     using T = double;
     cstone::FBox<T> box{0.12, 0.50, 0.26, 0.44, 0.55, 0.8};
 
-    int multiplicity = 4;
-    auto [l, u]      = gridIntersection(box, multiplicity);
+    std::tuple<int, int, int> multiplicity = {4, 4, 4};
+    auto [l, u]                            = gridIntersection(box, multiplicity);
 
     cstone::Vec3<int> refLower{0, 1, 2};
     cstone::Vec3<int> refUpper{2, 2, 4};
@@ -59,7 +59,7 @@ TEST(Grids, scaleToGlobal)
     using T = double;
     cstone::Box<T> box{-1, 1};
 
-    int multiplicity = 4;
+    std::tuple<int, int, int> multiplicity = {4, 4, 4};
 
     {
         cstone::Vec3<T> testX{0.0, 0.0, 0.0};
@@ -101,7 +101,7 @@ TEST(Grids, assembleCube)
     using KeyType = unsigned;
     cstone::Box<T> box{-1, 1};
 
-    int multiplicity = 2;
+    std::tuple<int, int, int> multiplicity = {2, 2, 2};
 
     std::vector<T> xb{0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
     std::vector<T> yb{0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
@@ -112,17 +112,17 @@ TEST(Grids, assembleCube)
     KeyType k2 = 05123456701;
 
     std::vector<T> x1, y1, z1;
-    assembleCube<T>(KeyType(0), k1, box, multiplicity, xb, yb, zb, x1, y1, z1);
+    assembleRectangle<T>(KeyType(0), k1, box, multiplicity, xb, yb, zb, x1, y1, z1);
 
     std::vector<T> x2, y2, z2;
-    assembleCube<T>(k1, k2, box, multiplicity, xb, yb, zb, x2, y2, z2);
+    assembleRectangle<T>(k1, k2, box, multiplicity, xb, yb, zb, x2, y2, z2);
 
     std::vector<T> x3, y3, z3;
-    assembleCube<T>(k2, cstone::nodeRange<KeyType>(0), box, multiplicity, xb, yb, zb, x3, y3, z3);
+    assembleRectangle<T>(k2, cstone::nodeRange<KeyType>(0), box, multiplicity, xb, yb, zb, x3, y3, z3);
 
     // total number of particles in the 3 segments together should be initBlock.size() * multiplicity^3
     size_t totalSize = x1.size() + x2.size() + x3.size();
-    EXPECT_EQ(totalSize, multiplicity * multiplicity * multiplicity * xb.size());
+    EXPECT_EQ(totalSize, std::get<0>(multiplicity) * std::get<0>(multiplicity) * std::get<0>(multiplicity) * xb.size());
 
     std::vector<KeyType> keys(totalSize);
     auto                 ksfc = cstone::sfcKindPointer(keys.data());
@@ -149,4 +149,30 @@ TEST(Grids, assembleCube)
 
     // combined particles from duplicates should not contain any duplicate particles
     EXPECT_EQ(uit, keys.end());
+}
+TEST(Grids, assembleRectangle)
+{
+    using T       = double;
+    using KeyType = unsigned;
+    cstone::Box<T> box{0, 1, 0, 1, 0, 9};
+
+    std::tuple<int, int, int> multiplicity = {1, 2, 3};
+
+    std::vector<T> xb{0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
+    std::vector<T> yb{0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
+    std::vector<T> zb{0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
+
+    std::vector<T> x1, y1, z1;
+    assembleRectangle<T>(KeyType(0), cstone::nodeRange<KeyType>(0), box, multiplicity, xb, yb, zb, x1, y1, z1);
+
+    int totalNPart = 3 * xb.size() * std::get<0>(multiplicity) * std::get<1>(multiplicity) * std::get<2>(multiplicity);
+
+    EXPECT_NEAR(*std::max_element(x1.begin(), x1.end()), box.xmax(),
+                box.xmax() * 0.1 / std::get<0>(multiplicity) + 1e-10);
+    EXPECT_NEAR(*std::max_element(y1.begin(), y1.end()), box.ymax(),
+                box.ymax() * 0.1 / std::get<1>(multiplicity) + 1e-10);
+    EXPECT_NEAR(*std::max_element(z1.begin(), z1.end()), box.zmax(),
+                box.zmax() * 0.1 / std::get<2>(multiplicity) + 1e-10);
+
+    EXPECT_EQ(totalNPart, x1.size() + y1.size() + z1.size());
 }
