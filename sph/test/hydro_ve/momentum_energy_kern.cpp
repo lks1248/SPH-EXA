@@ -45,6 +45,9 @@ TEST(MomentumEnergy, JLoop)
 
     T sincIndex = 6.0;
     T K         = compute_3d_k(sincIndex);
+    T vx0       = 0.0;
+    T vy0       = 0.0;
+    T vz0       = 0.0;
     T Atmin     = 0.1;
     T Atmax     = 0.2;
     T ramp      = 1.0 / (Atmax - Atmin);
@@ -111,7 +114,7 @@ TEST(MomentumEnergy, JLoop)
     T maxvsignal = -1;
 
     // compute gradient for for particle 0
-    momentumAndEnergyJLoop(0, sincIndex, K, box, neighbors.data(), neighborsCount, x.data(), y.data(), z.data(),
+    momentumAndEnergyJLoop(0, sincIndex, K, vx0, vy0, vz0, box, neighbors.data(), neighborsCount, x.data(), y.data(), z.data(),
                            vx.data(), vy.data(), vz.data(), h.data(), m.data(), prho.data(), c.data(), c11.data(),
                            c12.data(), c13.data(), c22.data(), c23.data(), c33.data(), Atmin, Atmax, ramp, wh.data(),
                            whd.data(), kx.data(), xm.data(), alpha.data(), &grad_Px, &grad_Py, &grad_Pz, &du,

@@ -184,7 +184,7 @@ std::map<std::string, double> RayleighTaylorConstants()
             {"p0", 2.5},
             {"y0", 0.75},
             {"omega0", 0.0025},
-            {"G", 0.5}
+            {"vy0", -0.5}
     };
 }
 
@@ -201,14 +201,15 @@ public:
         constants_ = RayleighTaylorConstants();
     }
 
-    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cbrtNumPart, Dataset& d) const override
+    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cbrtNumPart, Dataset& simData) const override
     {
         using KeyType = typename Dataset::KeyType;
         using T       = typename Dataset::RealType;
+        auto& d       = simData.hydro;
 
         T rhoUp = constants_.at("rhoUp");
 
-        d.g = constants_.at("G");
+        d.vy0 = constants_.at("vy0");
 
         std::vector<T> xBlock, yBlock, zBlock;
         fileutils::readTemplateBlock(glassBlock, xBlock, yBlock, zBlock);
@@ -230,7 +231,7 @@ public:
         initRayleighTaylorFields(d, constants_, particleMass);
 
         d.numParticlesGlobal = d.x.size();
-        MPI_Allreduce(MPI_IN_PLACE, &d.numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, d.comm);
+        MPI_Allreduce(MPI_IN_PLACE, &d.numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, simData.comm);
 
         return globalBox;
     }

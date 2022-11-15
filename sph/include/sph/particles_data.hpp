@@ -88,6 +88,9 @@ public:
     //! @brief gravitational constant
     T g{0.0};
 
+    //! @brief additional constant velocity
+    T vx0{0.0}, vy0{0.0}, vz0{0.0};
+
     //! @brief adiabatic index
     T gamma{5.0 / 3.0};
     //! @brief mean molecular weight of ions for models that use one value for all particles

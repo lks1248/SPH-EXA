@@ -135,7 +135,7 @@ localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, size_t ngmax, si
  * @param[in]     box          bounding box
  */
 template<typename T, class Dataset> util::tuple<T, T>
-computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, const cstone::Box<T>& box, size_t ngmax)
+computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, MPI_Comm comm, const cstone::Box<T>& box, size_t ngmax)
 {
     auto [localUp, localDown] = localVelocitiesRTGrowthRate(startIndex, endIndex, ngmax, d.x.size(), d.Atmin, d.Atmax, d.ramp,
             d.y.data(), d.vy.data(), d.prho.data(), d.neighbors.data(), d.nc.data());
@@ -143,7 +143,7 @@ computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, co
     int rootRank = 0;
     int mpiranks;
 
-    MPI_Comm_size(d.comm, &mpiranks);
+    MPI_Comm_size(comm, &mpiranks);
     size_t rootsize = 50 * mpiranks;
 
     std::vector<AuxT<T>> globalUp(rootsize);
@@ -160,11 +160,11 @@ computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, co
     MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_AuxT_type);
     MPI_Type_commit(&mpi_AuxT_type);
 
-    MPI_Gather(localUp.data(), 50, mpi_AuxT_type, globalUp.data(), 50, mpi_AuxT_type, rootRank, d.comm);
-    MPI_Gather(localDown.data(), 50, mpi_AuxT_type, globalDown.data(), 50, mpi_AuxT_type, rootRank, d.comm);
+    MPI_Gather(localUp.data(), 50, mpi_AuxT_type, globalUp.data(), 50, mpi_AuxT_type, rootRank, comm);
+    MPI_Gather(localDown.data(), 50, mpi_AuxT_type, globalDown.data(), 50, mpi_AuxT_type, rootRank, comm);
 
     int rank;
-    MPI_Comm_rank(d.comm, &rank);
+    MPI_Comm_rank(comm, &rank);
 
     T vy_max = 0.;
     T vy_min = 0.;
@@ -202,12 +202,14 @@ public:
 
     using T = typename Dataset::RealType;
 
-    void computeAndWrite(Dataset& d, size_t firstIndex, size_t lastIndex, cstone::Box<T>& box)
+    void computeAndWrite(Dataset& simData, size_t firstIndex, size_t lastIndex, cstone::Box<T>& box)
     {
-        auto [vy_max, vy_min] = computeVelocitiesRTGrowthRate<T>(firstIndex, lastIndex, d, box, ngmax);
+        auto& d = simData.hydro;
+
+        auto [vy_max, vy_min] = computeVelocitiesRTGrowthRate<T>(firstIndex, lastIndex, d, simData.comm, box, ngmax);
 
         int rank;
-        MPI_Comm_rank(d.comm, &rank);
+        MPI_Comm_rank(simData.comm, &rank);
 
         if (rank == 0)
         {

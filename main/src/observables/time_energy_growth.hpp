@@ -112,14 +112,16 @@ public:
 
     using T = typename Dataset::RealType;
 
-    void computeAndWrite(Dataset& d, size_t firstIndex, size_t lastIndex, cstone::Box<T>& box)
+    void computeAndWrite(Dataset& simData, size_t firstIndex, size_t lastIndex, cstone::Box<T>& box)
     {
-        computeConservedQuantities(firstIndex, lastIndex, d);
+        auto& d = simData.hydro;
+
+        computeConservedQuantities(firstIndex, lastIndex, d, simData.comm);
         transferToHost(d, firstIndex, lastIndex, {"x", "y", "vy", "kx", "xm"});
         T khgr = computeKHGrowthRate<T>(firstIndex, lastIndex, d, box);
 
         int rank;
-        MPI_Comm_rank(d.comm, &rank);
+        MPI_Comm_rank(simData.comm, &rank);
 
         if (rank == 0)
         {

@@ -207,10 +207,11 @@ public:
         constants_ = KelvinHelmholtzConstants();
     }
 
-    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cbrtNumPart, Dataset& d) const override
+    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cbrtNumPart, Dataset& simData) const override
     {
         using KeyType = typename Dataset::KeyType;
         using T       = typename Dataset::RealType;
+        auto& d       = simData.hydro;
 
         T rhoInt = constants_.at("rhoInt");
 
@@ -234,7 +235,7 @@ public:
         initKelvinHelmholtzFields(d, constants_, particleMass);
 
         d.numParticlesGlobal = d.x.size();
-        MPI_Allreduce(MPI_IN_PLACE, &d.numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, d.comm);
+        MPI_Allreduce(MPI_IN_PLACE, &d.numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, simData.comm);
 
         return globalBox;
     }

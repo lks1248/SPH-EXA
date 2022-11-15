@@ -44,6 +44,9 @@ TEST(MomentumEnergy, JLoop)
 
     T sincIndex = 6.0;
     T K         = compute_3d_k(sincIndex);
+    T vx0       = 0.0;
+    T vy0       = 0.0;
+    T vz0       = 0.0;
 
     std::array<double, lt::size> wh  = lt::createWharmonicLookupTable<double, lt::size>();
     std::array<double, lt::size> whd = lt::createWharmonicDerivativeLookupTable<double, lt::size>();
@@ -91,7 +94,7 @@ TEST(MomentumEnergy, JLoop)
     T maxvsignal = -1;
 
     // compute gradient for for particle 0
-    momentumAndEnergyJLoop(0, sincIndex, K, box, neighbors.data(), neighborsCount, x.data(), y.data(), z.data(),
+    momentumAndEnergyJLoop(0, sincIndex, K, vx0, vy0, vz0, box, neighbors.data(), neighborsCount, x.data(), y.data(), z.data(),
                            vx.data(), vy.data(), vz.data(), h.data(), m.data(), rho.data(), p.data(), c.data(),
                            c11.data(), c12.data(), c13.data(), c22.data(), c23.data(), c33.data(), wh.data(),
                            whd.data(), &grad_Px, &grad_Py, &grad_Pz, &du, &maxvsignal);
@@ -109,6 +112,9 @@ TEST(MomentumEnergy, JLoopPBC)
 
     T sincIndex = 6.0;
     T K         = compute_3d_k(sincIndex);
+    T vx0       = 0.0;
+    T vy0       = 0.0;
+    T vz0       = 0.0;
 
     std::array<double, lt::size> wh  = lt::createWharmonicLookupTable<double, lt::size>();
     std::array<double, lt::size> whd = lt::createWharmonicDerivativeLookupTable<double, lt::size>();
@@ -159,7 +165,7 @@ TEST(MomentumEnergy, JLoopPBC)
     T maxvsignal = -1;
 
     // compute gradient for for particle 0
-    momentumAndEnergyJLoop(0, sincIndex, K, box, neighbors.data(), neighborsCount, x.data(), y.data(), z.data(),
+    momentumAndEnergyJLoop(0, sincIndex, K, vx0, vy0, vz0, box, neighbors.data(), neighborsCount, x.data(), y.data(), z.data(),
                            vx.data(), vy.data(), vz.data(), h.data(), m.data(), rho.data(), p.data(), c.data(),
                            c11.data(), c12.data(), c13.data(), c22.data(), c23.data(), c33.data(), wh.data(),
                            whd.data(), &grad_Px, &grad_Py, &grad_Pz, &du, &maxvsignal);

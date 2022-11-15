@@ -11,12 +11,13 @@ namespace sph
 {
 
 template<class Tc, class Tm, class T, class Tm1>
-HOST_DEVICE_FUN inline void momentumAndEnergyJLoop(cstone::LocalIndex i, T sincIndex, T K, const cstone::Box<T>& box,
+HOST_DEVICE_FUN inline void momentumAndEnergyJLoop(cstone::LocalIndex i, T sincIndex, T K, T vx0, T vy0, T vz0, const cstone::Box<T>& box,
                                                    const cstone::LocalIndex* neighbors, unsigned neighborsCount,
                                                    const Tc* x, const Tc* y, const Tc* z, const T* vx, const T* vy,
                                                    const T* vz, const T* h, const Tm* m, const T* rho, const T* p,
                                                    const T* c, const T* c11, const T* c12, const T* c13, const T* c22,
-                                                   const T* c23, const T* c33, const T* wh, const T* whd, T* grad_P_x,
+                                                   const T* c23, const T* c33,
+                                                   const T* wh, const T* whd, T* grad_P_x,
                                                    T* grad_P_y, T* grad_P_z, Tm1* du, T* maxvsignal)
 {
     constexpr T gradh_i = 1.0;
@@ -25,9 +26,9 @@ HOST_DEVICE_FUN inline void momentumAndEnergyJLoop(cstone::LocalIndex i, T sincI
     auto xi  = x[i];
     auto yi  = y[i];
     auto zi  = z[i];
-    auto vxi = vx[i];
-    auto vyi = vy[i];
-    auto vzi = vz[i];
+    auto vxi = vx[i] + vx0;
+    auto vyi = vy[i] + vy0;
+    auto vzi = vz[i] + vz0;
 
     auto hi  = h[i];
     auto roi = rho[i];
@@ -62,9 +63,9 @@ HOST_DEVICE_FUN inline void momentumAndEnergyJLoop(cstone::LocalIndex i, T sincI
         T r2   = rx * rx + ry * ry + rz * rz;
         T dist = std::sqrt(r2);
 
-        T vx_ij = vxi - vx[j];
-        T vy_ij = vyi - vy[j];
-        T vz_ij = vzi - vz[j];
+        T vx_ij = vxi - (vx[j] + vx0);
+        T vy_ij = vyi - (vy[j] + vy0);
+        T vz_ij = vzi - (vz[j] + vz0);
 
         T hj    = h[j];
         T hjInv = T(1) / hj;
