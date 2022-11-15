@@ -1,8 +1,7 @@
 /*
  * MIT License
  *
- * Copyright (c) 2022 CSCS, ETH Zurich
- *               2021 University of Basel
+ * Copyright (c) 2022 CSCS, ETH Zurich, University of Basel, University of Zurich
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,23 +23,43 @@
  */
 
 /*! @file
- * @brief  Energy and momentum reductions on the GPU
+ * @brief Contains the object holding all simulation data
  *
  * @author Sebastian Keller <sebastian.f.keller@gmail.com>
  */
 
 #pragma once
 
-#include <tuple>
+#include <mpi.h>
 
-#include "cstone/tree/definitions.h"
+#include "cooling/chemistry_data.hpp"
+#include "sph/particles_data.hpp"
 
 namespace sphexa
 {
 
-template<class Tc, class Tv, class Tt, class Tm>
-extern std::tuple<double, double, cstone::Vec3<double>, cstone::Vec3<double>>
-conservedQuantitiesGpu(Tt cv, const Tc* x, const Tc* y, const Tc* z, const Tv* vx, const Tv* vy, const Tv* vz,
-                       const Tt* temp, const Tm* m, size_t, size_t);
+//! @brief the place to store hydro, chemistry, nuclear and other simulation data
+template<typename T, typename KeyType_, class AccType>
+class SimulationData
+{
+public:
+    using AcceleratorType = AccType;
+    using KeyType         = KeyType_;
+    using RealType        = T;
+
+    using HydroData = ParticlesData<RealType, KeyType, AccType>;
+    using ChemData  = cooling::ChemistryData<T>;
+
+    //! @brief spacially distributed data for hydrodynamics and gravity
+    HydroData hydro;
+
+    //! @brief chemistry data for radiative cooling, e.g. for GRACKLE
+    ChemData chem;
+
+    //! @brief non-spacially distributed nuclear abundances
+    // NuclearData nuclear;
+
+    MPI_Comm comm;
+};
 
 } // namespace sphexa

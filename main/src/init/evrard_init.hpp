@@ -34,6 +34,7 @@
 #include <map>
 
 #include "cstone/sfc/box.hpp"
+#include "sph/eos.hpp"
 
 #include "isim_init.hpp"
 #include "early_sync.hpp"
@@ -41,6 +42,12 @@
 
 namespace sphexa
 {
+
+std::map<std::string, double> evrardConstants()
+{
+    return {{"G", 1.},  {"r", 1.}, {"mTotal", 1.}, {"gamma", 5. / 3.}, {"u0", 0.05}, {"firstTimeStep", 1e-4},
+            {"mui", 10}};
+}
 
 template<class Dataset>
 void initEvrardFields(Dataset& d, const std::map<std::string, double>& constants)
@@ -51,18 +58,23 @@ void initEvrardFields(Dataset& d, const std::map<std::string, double>& constants
     double mPart         = constants.at("mTotal") / d.numParticlesGlobal;
     double firstTimeStep = constants.at("firstTimeStep");
 
-    std::fill(d.m.begin(), d.m.end(), mPart);
-    std::fill(d.du_m1.begin(), d.du_m1.end(), 0.0);
-    std::fill(d.mui.begin(), d.mui.end(), 10.0);
-    std::fill(d.alpha.begin(), d.alpha.end(), d.alphamin);
-
+    d.gamma    = constants.at("gamma");
+    d.muiConst = constants.at("mui");
     d.minDt    = firstTimeStep;
     d.minDt_m1 = firstTimeStep;
+
+    std::fill(d.m.begin(), d.m.end(), mPart);
+    std::fill(d.du_m1.begin(), d.du_m1.end(), 0.0);
+    std::fill(d.mui.begin(), d.mui.end(), d.muiConst);
+    std::fill(d.alpha.begin(), d.alpha.end(), d.alphamin);
 
     std::fill(d.vx.begin(), d.vx.end(), 0.0);
     std::fill(d.vy.begin(), d.vy.end(), 0.0);
     std::fill(d.vz.begin(), d.vz.end(), 0.0);
-    std::fill(d.u.begin(), d.u.end(), constants.at("u0"));
+
+    auto cv    = sph::idealGasCv(d.muiConst);
+    auto temp0 = constants.at("u0") / cv;
+    std::fill(d.temp.begin(), d.temp.end(), temp0);
 
     T totalVolume = 4 * M_PI / 3 * std::pow(constants.at("r"), 3);
     // before the contraction with sqrt(r), the sphere has a constant particle concentration of Ntot / Vtot
@@ -100,11 +112,6 @@ void contractRhoProfile(Vector& x, Vector& y, Vector& z)
     }
 }
 
-std::map<std::string, double> evrardConstants()
-{
-    return {{"G", 1.}, {"r", 1.}, {"mTotal", 1.}, {"gamma", 5. / 3.}, {"u0", 0.05}, {"firstTimeStep", 1e-4}};
-}
-
 template<class Dataset>
 class EvrardGlassSphere : public ISimInitializer<Dataset>
 {
@@ -118,8 +125,10 @@ public:
         constants_ = evrardConstants();
     }
 
-    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cbrtNumPart, Dataset& d) const override
+    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cbrtNumPart,
+                                                 Dataset& simData) const override
     {
+        auto& d       = simData.hydro;
         using KeyType = typename Dataset::KeyType;
         using T       = typename Dataset::RealType;
 
@@ -139,9 +148,8 @@ public:
         cutSphere(r, d.x, d.y, d.z);
 
         d.numParticlesGlobal = d.x.size();
-        MPI_Allreduce(MPI_IN_PLACE, &d.numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, d.comm);
+        MPI_Allreduce(MPI_IN_PLACE, &d.numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, simData.comm);
 
-        syncCoords<KeyType>(rank, numRanks, d.numParticlesGlobal, d.x, d.y, d.z, globalBox);
         contractRhoProfile(d.x, d.y, d.z);
         syncCoords<KeyType>(rank, numRanks, d.numParticlesGlobal, d.x, d.y, d.z, globalBox);
 

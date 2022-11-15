@@ -162,8 +162,8 @@ auto makeHalfDenseTemplate(std::vector<T> x, std::vector<T> y, std::vector<T> z,
  * @params x_LD, y_LD, z_HD:     x, y and z coordinate vector of the low density template
  */
 template<class T, class Dataset>
-void assembleKelvinHelmholtz(std::vector<T> x_HD, std::vector<T> y_HD, std::vector<T> z_HD, std::vector<T> x_LD,
-                             std::vector<T> y_LD, std::vector<T> z_LD, Dataset& d, size_t start, size_t end,
+void assembleKelvinHelmholtz(std::vector<T>& x_HD, std::vector<T>& y_HD, std::vector<T>& z_HD, std::vector<T>& x_LD,
+                             std::vector<T>& y_LD, std::vector<T>& z_LD, Dataset& d, size_t start, size_t end,
                              const std::map<std::string, double>& constants)
 {
 

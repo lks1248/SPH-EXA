@@ -1,8 +1,7 @@
 /*
  * MIT License
  *
- * Copyright (c) 2022 CSCS, ETH Zurich
- *               2021 University of Basel
+ * Copyright (c) 2022 CSCS, ETH Zurich, University of Zurich, University of Basel
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,23 +23,39 @@
  */
 
 /*! @file
- * @brief  Energy and momentum reductions on the GPU
+ * @brief Radiative cooling tests with GRACKLE
  *
+ * @author Noah Kubli <noah.kubli@uzh.ch>
  * @author Sebastian Keller <sebastian.f.keller@gmail.com>
  */
 
-#pragma once
+#include <iostream>
+#include <vector>
 
-#include <tuple>
+#include "gtest/gtest.h"
 
-#include "cstone/tree/definitions.h"
+#include "cooling/chemistry_data.hpp"
 
-namespace sphexa
+using namespace cooling;
+using cstone::get;
+
+TEST(ChemistryData, test1a)
 {
+    using T = double;
+    ChemistryData<T> data;
 
-template<class Tc, class Tv, class Tt, class Tm>
-extern std::tuple<double, double, cstone::Vec3<double>, cstone::Vec3<double>>
-conservedQuantitiesGpu(Tt cv, const Tc* x, const Tc* y, const Tc* z, const Tv* vx, const Tv* vy, const Tv* vz,
-                       const Tt* temp, const Tm* m, size_t, size_t);
+    // activate some of the fields at runtime, affects next resize
+    data.setConserved(0, 1, 9);
 
-} // namespace sphexa
+    size_t dataSize = 10;
+    data.resize(dataSize);
+
+    EXPECT_EQ(data.fields[0].size(), dataSize);
+    EXPECT_EQ(data.fields[1].size(), dataSize);
+    EXPECT_EQ(data.fields[9].size(), dataSize);
+
+    EXPECT_EQ(data.fields[2].size(), 0);
+
+    // fields can also be accessed based on names
+    EXPECT_EQ(get<"Y0">(data).data(), data.fields[0].data());
+}

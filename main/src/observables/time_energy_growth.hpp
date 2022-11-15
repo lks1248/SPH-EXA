@@ -47,16 +47,16 @@ std::array<Tc, 3> localGrowthRate(size_t startIndex, size_t endIndex, const Tc* 
 {
     const Tc ybox = box.ly();
 
-    Tc sumsi = 0;
-    Tc sumci = 0;
-    Tc sumdi = 0;
+    Tc sumsi = 0.0;
+    Tc sumci = 0.0;
+    Tc sumdi = 0.0;
 
 #pragma omp parallel for reduction(+ : sumsi, sumci, sumdi)
     for (size_t i = startIndex; i < endIndex; i++)
     {
         Tc voli = xm[i] / kx[i];
         Tc aux;
-        if (y[i] > ybox * 0.5) { aux = std::exp(-4.0 * PI * std::abs(y[i] - 0.25)); }
+        if (y[i] < ybox * 0.5) { aux = std::exp(-4.0 * PI * std::abs(y[i] - 0.25)); }
         else { aux = std::exp(-4.0 * PI * std::abs(ybox - y[i] - 0.25)); }
         Tc si = vy[i] * voli * std::sin(4.0 * PI * x[i]) * aux;
         Tc ci = vy[i] * voli * std::cos(4.0 * PI * x[i]) * aux;
@@ -88,12 +88,11 @@ T computeKHGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, const csto
         throw std::runtime_error("kx was empty. KHGrowthRate only supported with volume elements (--prop ve)\n");
     }
 
-
     std::array<T, 3> localSum =
         localGrowthRate(startIndex, endIndex, d.x.data(), d.y.data(), d.vy.data(), d.xm.data(), d.kx.data(), box);
 
     int              rootRank = 0;
-    std::array<T, 3> sum;
+    std::array<T, 3> sum      = {0.0};
     MPI_Reduce(localSum.data(), sum.data(), 3, MpiType<T>{}, MPI_SUM, rootRank, MPI_COMM_WORLD);
 
     return 2.0 * std::sqrt(sum[0] * sum[0] + sum[1] * sum[1]) / sum[2];

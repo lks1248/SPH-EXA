@@ -36,6 +36,7 @@
 #include <sstream>
 #include <variant>
 
+#include "cstone/fields/particles_get.hpp"
 #include "sph/sph.hpp"
 #include "sph/hydro_turb/turbulence_data.hpp"
 
@@ -49,20 +50,21 @@ namespace sphexa
 {
 
 using namespace sph;
+using cstone::FieldStates;
 
 //! @brief VE hydro propagator that adds turbulence stirring to the acceleration prior to position update
-template<class DomainType, class ParticleDataType>
-class TurbVeProp final : public HydroVeProp<DomainType, ParticleDataType>
+template<class DomainType, class DataType>
+class TurbVeProp final : public HydroVeProp<DomainType, DataType>
 {
-    using Base = HydroVeProp<DomainType, ParticleDataType>;
+    using Base = HydroVeProp<DomainType, DataType>;
     using Base::ng0_;
     using Base::ngmax_;
     using Base::rank_;
     using Base::timer;
 
-    using RealType = typename ParticleDataType::RealType;
+    using RealType = typename DataType::RealType;
 
-    sph::TurbulenceData<RealType, typename ParticleDataType::AcceleratorType> turbulenceData;
+    sph::TurbulenceData<RealType, typename DataType::AcceleratorType> turbulenceData;
 
 public:
     TurbVeProp(size_t ngmax, size_t ng0, std::ostream& output, size_t rank)
@@ -138,10 +140,11 @@ public:
         H5PartCloseFile(h5_file);
     }
 
-    void step(DomainType& domain, ParticleDataType& d) override
+    void step(DomainType& domain, DataType& simData) override
     {
-        Base::computeForces(domain, d);
+        Base::computeForces(domain, simData);
 
+        auto&  d     = simData.hydro;
         size_t first = domain.startIndex();
         size_t last  = domain.endIndex();
 

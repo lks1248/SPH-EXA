@@ -34,6 +34,7 @@
 #include <map>
 
 #include "cstone/sfc/box.hpp"
+#include "sph/eos.hpp"
 
 #include "io/file_utils.hpp"
 #ifdef SPH_EXA_HAVE_H5PART
@@ -45,6 +46,12 @@
 namespace sphexa
 {
 
+std::map<std::string, double> nohConstants()
+{
+    return {{"r0", 0},     {"r1", 0.5}, {"mTotal", 1.}, {"dim", 3},  {"gamma", 5.0 / 3.0},    {"rho0", 1.},
+            {"u0", 1e-20}, {"p0", 0.},  {"vr0", -1.},   {"cs0", 0.}, {"firstTimeStep", 1e-4}, {"mui", 10.}};
+}
+
 template<class Dataset>
 void initNohFields(Dataset& d, double totalVolume, const std::map<std::string, double>& constants)
 {
@@ -55,22 +62,26 @@ void initNohFields(Dataset& d, double totalVolume, const std::map<std::string, d
     double mPart         = constants.at("mTotal") / d.numParticlesGlobal;
     double firstTimeStep = constants.at("firstTimeStep");
 
+    d.gamma    = constants.at("gamma");
+    d.muiConst = constants.at("mui");
+    d.minDt    = firstTimeStep;
+    d.minDt_m1 = firstTimeStep;
+
+    auto cv    = sph::idealGasCv(d.muiConst);
+    auto temp0 = constants.at("u0") / cv;
+
     std::fill(d.m.begin(), d.m.end(), mPart);
     std::fill(d.h.begin(), d.h.end(), hInit);
     std::fill(d.du_m1.begin(), d.du_m1.end(), 0.0);
-    std::fill(d.mui.begin(), d.mui.end(), 10.0);
+    std::fill(d.mui.begin(), d.mui.end(), d.muiConst);
+    std::fill(d.temp.begin(), d.temp.end(), temp0);
     std::fill(d.alpha.begin(), d.alpha.end(), d.alphamin);
-
-    d.minDt    = firstTimeStep;
-    d.minDt_m1 = firstTimeStep;
 
 #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < d.x.size(); i++)
     {
-        T radius = std::sqrt((d.x[i] * d.x[i]) + (d.y[i] * d.y[i]) + (d.z[i] * d.z[i]));
+        T radius = std::sqrt(d.x[i] * d.x[i] + d.y[i] * d.y[i] + d.z[i] * d.z[i]);
         radius   = std::max(radius, T(1e-10));
-
-        d.u[i] = constants.at("u0");
 
         d.vx[i] = constants.at("vr0") * (d.x[i] / radius);
         d.vy[i] = constants.at("vr0") * (d.y[i] / radius);
@@ -82,12 +93,6 @@ void initNohFields(Dataset& d, double totalVolume, const std::map<std::string, d
     }
 }
 
-std::map<std::string, double> nohConstants()
-{
-    return {{"r0", 0},     {"r1", 0.5}, {"mTotal", 1.}, {"dim", 3},  {"gamma", 5.0 / 3.0},   {"rho0", 1.},
-            {"u0", 1e-20}, {"p0", 0.},  {"vr0", -1.},   {"cs0", 0.}, {"firstTimeStep", 1e-4}};
-}
-
 template<class Dataset>
 class NohGrid : public ISimInitializer<Dataset>
 {
@@ -96,8 +101,10 @@ class NohGrid : public ISimInitializer<Dataset>
 public:
     NohGrid() { constants_ = nohConstants(); }
 
-    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cubeSide, Dataset& d) const override
+    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cubeSide,
+                                                 Dataset& simData) const override
     {
+        auto& d              = simData.hydro;
         using T              = typename Dataset::RealType;
         d.numParticlesGlobal = cubeSide * cubeSide * cubeSide;
 
@@ -129,8 +136,10 @@ public:
         constants_ = nohConstants();
     }
 
-    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cbrtNumPart, Dataset& d) const override
+    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cbrtNumPart,
+                                                 Dataset& simData) const override
     {
+        auto& d       = simData.hydro;
         using KeyType = typename Dataset::KeyType;
         using T       = typename Dataset::RealType;
 
@@ -148,7 +157,7 @@ public:
         cutSphere(r, d.x, d.y, d.z);
 
         d.numParticlesGlobal = d.x.size();
-        MPI_Allreduce(MPI_IN_PLACE, &d.numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, d.comm);
+        MPI_Allreduce(MPI_IN_PLACE, &d.numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, simData.comm);
 
         d.resize(d.x.size());
 

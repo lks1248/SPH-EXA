@@ -39,9 +39,9 @@
 namespace sphexa
 {
 //!@brief counts the number of particles that still belong to the cloud on each rank
-template<class Tu, class T, class Tm>
-size_t localSurvivors(size_t first, size_t last, const Tu* u, const T* kx, const T* xmass, const Tm* m,
-                      double rhoBubble, double uWind)
+template<class Tt, class T, class Tm>
+size_t localSurvivors(size_t first, size_t last, const Tt* temp, const T* kx, const T* xmass, const Tm* m,
+                      double rhoBubble, double tempWind)
 {
     size_t survivors = 0;
 
@@ -50,7 +50,7 @@ size_t localSurvivors(size_t first, size_t last, const Tu* u, const T* kx, const
     {
         T rhoi = kx[i] / xmass[i] * m[i];
 
-        if (rhoi >= 0.64 * rhoBubble && u[i] <= 0.9 * uWind) { survivors++; }
+        if (rhoi >= 0.64 * rhoBubble && temp[i] <= 0.9 * tempWind) { survivors++; }
     }
 
     return survivors;
@@ -105,20 +105,23 @@ public:
 
     using T = typename Dataset::RealType;
 
-    void computeAndWrite(Dataset& d, size_t firstIndex, size_t lastIndex, cstone::Box<T>& box)
+    void computeAndWrite(Dataset& simData, size_t firstIndex, size_t lastIndex, cstone::Box<T>& box)
     {
-        computeConservedQuantities(firstIndex, lastIndex, d);
+        auto& d = simData.hydro;
+        computeConservedQuantities(firstIndex, lastIndex, d, simData.comm);
 
         if (d.kx.empty())
         {
             throw std::runtime_error(
                 "kx was empty. Wind Shock surviving fraction is only supported with volume elements (--prop ve)\n");
         }
-        transferToHost(d, firstIndex, lastIndex, {"kx", "xm"});
-        auto bubbleFraction = calculateSurvivingFraction(firstIndex, lastIndex, d.u.data(), d.kx.data(), d.xm.data(),
-                                                         d.m.data(), rhoBubble, uWind, initialMass);
+        transferToHost(d, firstIndex, lastIndex, {"temp", "kx", "xm"});
+
+        T    tempWind       = uWind * sph::idealGasCv(d.muiConst);
+        auto bubbleFraction = calculateSurvivingFraction(firstIndex, lastIndex, d.temp.data(), d.kx.data(), d.xm.data(),
+                                                         d.m.data(), rhoBubble, tempWind, initialMass);
         int  rank;
-        MPI_Comm_rank(d.comm, &rank);
+        MPI_Comm_rank(simData.comm, &rank);
 
         if (rank == 0)
         {
