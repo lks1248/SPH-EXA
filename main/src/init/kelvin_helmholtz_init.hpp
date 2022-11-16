@@ -73,6 +73,8 @@ void initKelvinHelmholtzFields(Dataset& d, const std::map<std::string, double>& 
     d.minDt    = firstTimeStep;
     d.minDt_m1 = firstTimeStep;
 
+    auto cv = sph::idealGasCv(d.muiConst);
+
 #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < d.x.size(); i++)
     {
@@ -85,7 +87,7 @@ void initKelvinHelmholtzFields(Dataset& d, const std::map<std::string, double>& 
         if (d.y[i] < 0.75 && d.y[i] > 0.25)
         {
             d.h[i]  = hInt;
-            d.u[i]  = uInt;
+            d.temp[i]  = uInt /cv;
             if(d.y[i] > 0.5)
             {
                 d.vx[i] = vxInt + vDif * std::exp((d.y[i] - 0.75) / ls);
@@ -98,7 +100,7 @@ void initKelvinHelmholtzFields(Dataset& d, const std::map<std::string, double>& 
         else
         {
             d.h[i]  = hExt;
-            d.u[i]  = uExt;
+            d.temp[i]  = uExt / cv;
             if(d.y[i] < 0.25)
             {
                 d.vx[i] = vxExt - vDif * std::exp((d.y[i] - 0.25) / ls);
