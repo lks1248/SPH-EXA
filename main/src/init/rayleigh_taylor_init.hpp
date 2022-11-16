@@ -55,6 +55,7 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     T gamma         = constants.at("gamma");
     T p0            = constants.at("p0");
     T y0            = constants.at("y0");
+    T vy0           = constants.at("vy0");
 
     size_t ng0   = 100;
     T      hUp   = 0.5 * std::cbrt(3. * ng0 * massPart / 4. / M_PI / rhoUp);
@@ -74,6 +75,8 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
 #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < d.x.size(); i++)
     {
+        std::cout << "i=" << i << std::endl;
+
         d.x[i] /= 16.;
         d.y[i] /= 16.;
         d.z[i] /= 16.;
@@ -82,15 +85,25 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
 
         if (d.y[i] < 0.75)
         {
+            T p = p0 + vy0 * rhoDown * (y0 - d.y[i]);
+            T u = p / ((gamma - 1.) * rhoDown);
+
+            std::cout << "i=" << i << " (Down): h=" << hDown << ", p=" << p << ", u=" << u << std::endl;
+
             d.h[i] = hDown;
-            d.p[i] = p0 + d.g * rhoDown * (y0 - d.y[i]);
-            d.u[i] = d.p[i] / ((gamma - 1.) * rhoDown);
+            d.p[i] = p;
+            d.u[i] = u;
         }
         else
         {
+            T p = p0 + vy0 * rhoUp * (y0 - d.y[i]);
+            T u = p / ((gamma - 1.) * rhoUp);
+
+            std::cout << "i=" << i << " (Up): h=" << hUp << ", p=" << p << ", u=" << u << std::endl;
+
             d.h[i] = hUp;
-            d.p[i] = p0 + d.g * rhoUp * (y0 - d.y[i]);
-            d.u[i] = d.p[i] / ((gamma - 1.) * rhoUp);
+            d.p[i] = p;
+            d.u[i] = u;
         }
 
         d.x_m1[i] = d.vx[i] * firstTimeStep;
@@ -152,7 +165,6 @@ void assembleRayleighTaylor(std::vector<T> x_HD, std::vector<T> y_HD, std::vecto
                              std::vector<T> y_LD, std::vector<T> z_LD, Dataset& d, size_t start, size_t end,
                              const std::map<std::string, double>& constants)
 {
-
     for (size_t i = 0; i < 24; i++)
     {
         for (size_t j = 0; j < 8; j++)
