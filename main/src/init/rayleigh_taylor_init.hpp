@@ -72,11 +72,11 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     d.minDt    = firstTimeStep;
     d.minDt_m1 = firstTimeStep;
 
+    auto cv = sph::idealGasCv(d.muiConst);
+
 #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < d.x.size(); i++)
     {
-        std::cout << "i=" << i << std::endl;
-
         d.x[i] /= 16.;
         d.y[i] /= 16.;
         d.z[i] /= 16.;
@@ -88,22 +88,16 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
             T p = p0 + vy0 * rhoDown * (y0 - d.y[i]);
             T u = p / ((gamma - 1.) * rhoDown);
 
-            std::cout << "i=" << i << " (Down): h=" << hDown << ", p=" << p << ", u=" << u << std::endl;
-
-            d.h[i] = hDown;
-            d.p[i] = p;
-            d.u[i] = u;
+            d.h[i]    = hDown;
+            d.temp[i] = u / cv;
         }
         else
         {
             T p = p0 + vy0 * rhoUp * (y0 - d.y[i]);
             T u = p / ((gamma - 1.) * rhoUp);
 
-            std::cout << "i=" << i << " (Up): h=" << hUp << ", p=" << p << ", u=" << u << std::endl;
-
-            d.h[i] = hUp;
-            d.p[i] = p;
-            d.u[i] = u;
+            d.h[i]    = hUp;
+            d.temp[i] = u / cv;
         }
 
         d.x_m1[i] = d.vx[i] * firstTimeStep;
