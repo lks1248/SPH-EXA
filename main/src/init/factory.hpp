@@ -44,6 +44,7 @@
 #include "evrard_init.hpp"
 #include "isobaric_cube_init.hpp"
 #include "wind_shock_init.hpp"
+#include "kelvin_helmholtz_init.hpp"
 #include "turbulence_init.hpp"
 #endif
 
@@ -92,6 +93,11 @@ std::unique_ptr<ISimInitializer<Dataset>> initializerFactory(std::string testCas
     {
         if (glassBlock.empty()) { throw std::runtime_error("need a valid glass block for turbulence test\n"); }
         else { return std::make_unique<TurbulenceGlass<Dataset>>(glassBlock); }
+    }
+    if (testCase == "kelvin-helmholtz")
+    {
+        if (glassBlock.empty()) { throw std::runtime_error("need a valid glass block for Kelvin-Helmholtz test\n"); }
+        else { return std::make_unique<KelvinHelmholtzGlass<Dataset>>(glassBlock); }
     }
     if (std::filesystem::exists(testCase)) { return std::make_unique<FileInit<Dataset>>(testCase); }
 
