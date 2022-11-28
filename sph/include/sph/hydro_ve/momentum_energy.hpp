@@ -75,9 +75,6 @@ void computeMomentumEnergyImpl(size_t startIndex, size_t endIndex, unsigned ngma
 
     const T K         = d.K;
     const T sincIndex = d.sincIndex;
-    const T vx0       = d.vx0;
-    const T vy0       = d.vy0;
-    const T vz0       = d.vz0;
     const T Atmin     = d.Atmin;
     const T Atmax     = d.Atmax;
     const T ramp      = d.ramp;
@@ -92,7 +89,7 @@ void computeMomentumEnergyImpl(size_t startIndex, size_t endIndex, unsigned ngma
 
         T maxvsignal = 0;
 
-        momentumAndEnergyJLoop(i, sincIndex, K, vx0, vy0, vz0, box, neighbors + ngmax * ni, nc, x, y, z, vx, vy, vz, h, m, prho, c,
+        momentumAndEnergyJLoop(i, sincIndex, K, box, neighbors + ngmax * ni, nc, x, y, z, vx, vy, vz, h, m, prho, c,
                                c11, c12, c13, c22, c23, c33, Atmin, Atmax, ramp, wh, whd, kx, xm, alpha, grad_P_x,
                                grad_P_y, grad_P_z, du, &maxvsignal);
 

@@ -89,7 +89,7 @@ public:
     T g{0.0};
 
     //! @brief additional constant velocity
-    T vx0{0.0}, vy0{0.0}, vz0{0.0};
+    T ax0{0.0}, ay0{0.0}, az0{0.0};
 
     //! @brief adiabatic index
     T gamma{5.0 / 3.0};

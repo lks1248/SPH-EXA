@@ -53,7 +53,7 @@ struct GradPVEConfig
 __device__ float minDt_ve_device;
 
 template<class Tc, class Tm, class T, class Tm1, class KeyType>
-__global__ void momentumEnergyGpu(T sincIndex, T K, T Kcour, T vx0, T vy0, T vz0, T Atmin, T Atmax, T ramp, unsigned ngmax,
+__global__ void momentumEnergyGpu(T sincIndex, T K, T Kcour, T Atmin, T Atmax, T ramp, unsigned ngmax,
                                   const cstone::Box<T> box, size_t first, size_t last, size_t numParticles,
                                   const KeyType* particleKeys, const Tc* x, const Tc* y, const Tc* z, const T* vx,
                                   const T* vy, const T* vz, const T* h, const Tm* m, const T* prho, const T* c,
@@ -81,7 +81,7 @@ __global__ void momentumEnergyGpu(T sincIndex, T K, T Kcour, T vx0, T vy0, T vz0
         neighborsCount = stl::min(neighborsCount, ngmax);
 
         T maxvsignal;
-        momentumAndEnergyJLoop(i, sincIndex, K, vx0, vy0, vz0, box, neighbors, neighborsCount, x, y, z, vx, vy, vz, h, m, prho, c, c11,
+        momentumAndEnergyJLoop(i, sincIndex, K, box, neighbors, neighborsCount, x, y, z, vx, vy, vz, h, m, prho, c, c11,
                                c12, c13, c22, c23, c33, Atmin, Atmax, ramp, wh, whd, kx, xm, alpha, grad_P_x, grad_P_y,
                                grad_P_z, du, &maxvsignal);
 
@@ -112,7 +112,7 @@ void computeMomentumEnergy(size_t startIndex, size_t endIndex, unsigned ngmax, D
     checkGpuErrors(cudaMemcpyToSymbol(minDt_ve_device, &huge, sizeof(huge)));
 
     momentumEnergyGpu<<<numBlocks, numThreads>>>(
-        d.sincIndex, d.K, d.Kcour, d.vx0, d.vy0, d.vz0, d.Atmin, d.Atmax, d.ramp, ngmax, box, startIndex, endIndex, sizeWithHalos,
+        d.sincIndex, d.K, d.Kcour, d.Atmin, d.Atmax, d.ramp, ngmax, box, startIndex, endIndex, sizeWithHalos,
         rawPtr(d.devData.keys), rawPtr(d.devData.x), rawPtr(d.devData.y), rawPtr(d.devData.z), rawPtr(d.devData.vx),
         rawPtr(d.devData.vy), rawPtr(d.devData.vz), rawPtr(d.devData.h), rawPtr(d.devData.m), rawPtr(d.devData.prho),
         rawPtr(d.devData.c), rawPtr(d.devData.c11), rawPtr(d.devData.c12), rawPtr(d.devData.c13), rawPtr(d.devData.c22),

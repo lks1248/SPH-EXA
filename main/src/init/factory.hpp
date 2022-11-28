@@ -45,7 +45,6 @@
 #include "isobaric_cube_init.hpp"
 #include "wind_shock_init.hpp"
 #include "turbulence_init.hpp"
-#include "kelvin_helmholtz_init.hpp"
 #include "rayleigh_taylor_init.hpp"
 #endif
 
@@ -94,11 +93,6 @@ std::unique_ptr<ISimInitializer<Dataset>> initializerFactory(std::string testCas
     {
         if (glassBlock.empty()) { throw std::runtime_error("need a valid glass block for turbulence test\n"); }
         else { return std::make_unique<TurbulenceGlass<Dataset>>(glassBlock); }
-    }
-    if (testCase == "KH")
-    {
-        if (glassBlock.empty()) { throw std::runtime_error("need a valid glass block for Kelvin-Helmholtz test\n"); }
-        else { return std::make_unique<KelvinHelmholtzGlass<Dataset>>(glassBlock); }
     }
     if (testCase == "RT")
     {

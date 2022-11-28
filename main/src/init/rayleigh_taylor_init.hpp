@@ -165,16 +165,17 @@ void assembleRayleighTaylor(std::vector<T> x_HD, std::vector<T> y_HD, std::vecto
         {
             T iFloat = static_cast<T>(i);
             T jFloat = static_cast<T>(j);
+
             if (i > 11)
             {
-                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::periodic,
-                                    cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
+                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::none,
+                                    cstone::BoundaryType::none, cstone::BoundaryType::none);
                 assembleCube<T>(start, end, temp, 1, x_HD, y_HD, z_HD, d.x, d.y, d.z);
             }
             else
             {
-                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::periodic,
-                                    cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
+                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::none,
+                                    cstone::BoundaryType::none, cstone::BoundaryType::none);
                 assembleCube<T>(start, end, temp, 1, x_LD, y_LD, z_LD, d.x, d.y, d.z);
             }
         }
@@ -221,8 +222,7 @@ public:
         fileutils::readTemplateBlock(glassBlock, xBlock, yBlock, zBlock);
         size_t blockSize = xBlock.size();
 
-        cstone::Box<T> globalBox(0,  1, 0, 1, 0, 0.0625, cstone::BoundaryType::periodic, cstone::BoundaryType::fixed,
-                                 cstone::BoundaryType::periodic);
+        cstone::Box<T> globalBox(0,  0.5, 0, 1.5, 0, 0.0625, cstone::BoundaryType::periodic, cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
         auto [keyStart, keyEnd] = partitionRange(cstone::nodeRange<KeyType>(0), rank, numRanks);
 
         auto [xHalf, yHalf, zHalf] = makeHalfDenseTemplateRT<T, Dataset>(xBlock, yBlock, zBlock, blockSize);

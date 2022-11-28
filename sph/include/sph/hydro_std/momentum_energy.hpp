@@ -74,9 +74,6 @@ void computeMomentumEnergySTDImpl(size_t startIndex, size_t endIndex, unsigned n
 
     const T K         = d.K;
     const T sincIndex = d.sincIndex;
-    const T vx0       = d.vx0;
-    const T vy0       = d.vy0;
-    const T vz0       = d.vz0;
 
     T minDt = INFINITY;
 
@@ -88,7 +85,7 @@ void computeMomentumEnergySTDImpl(size_t startIndex, size_t endIndex, unsigned n
         T maxvsignal = 0;
 
         unsigned nc = std::min(neighborsCount[i], ngmax);
-        momentumAndEnergyJLoop(i, sincIndex, K, vx0, vy0, vz0, box, neighbors + ngmax * ni, nc, x, y, z, vx, vy, vz, h, m, rho, p, c,
+        momentumAndEnergyJLoop(i, sincIndex, K, box, neighbors + ngmax * ni, nc, x, y, z, vx, vy, vz, h, m, rho, p, c,
                                c11, c12, c13, c22, c23, c33, wh, whd, grad_P_x, grad_P_y, grad_P_z, du, &maxvsignal);
 
         T dt_i = tsKCourant(maxvsignal, h[i], c[i], d.Kcour);

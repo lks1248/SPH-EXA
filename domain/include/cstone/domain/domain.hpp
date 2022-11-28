@@ -53,68 +53,8 @@
 #include "cstone/util/reallocate.hpp"
 #include "cstone/util/traits.hpp"
 
-#include <chrono>
-
 namespace cstone
 {
-
-class Timer
-{
-public:
-    typedef std::chrono::high_resolution_clock Clock;
-    typedef std::chrono::time_point<Clock>     TimePoint;
-    typedef std::chrono::duration<float>       Time;
-
-    Timer(std::ostream& out)
-        : out(out)
-    {
-    }
-
-    float duration() { return std::chrono::duration_cast<Time>(tstop - tstart).count(); }
-
-    void start() { tstart = tstop = tlast = Clock::now(); }
-
-    void stop() { tstop = Clock::now(); }
-
-    void step(const std::string& name)
-    {
-        stop();
-        out << "# " << name << ": " << std::chrono::duration_cast<Time>(tstop - tlast).count() << "s" << std::endl;
-        tlast = tstop;
-    }
-
-private:
-    std::ostream& out;
-    TimePoint     tstart, tstop, tlast;
-};
-
-class MasterProcessTimer : public Timer
-{
-public:
-    MasterProcessTimer(std::ostream& out, int rank)
-        : Timer(out)
-        , rank(rank)
-    {
-    }
-
-    float duration() { return rank == 0 ? Timer::duration() : 0.0f; }
-
-    void start()
-    {
-        if (rank == 0) Timer::start();
-    }
-    void stop()
-    {
-        if (rank == 0) Timer::stop();
-    }
-    void step(const std::string& name)
-    {
-        if (rank == 0) Timer::step(name);
-    }
-
-private:
-    int rank;
-};
 
 template<class KeyType, class T>
 class GlobalAssignmentGpu;
@@ -152,7 +92,6 @@ public:
         , theta_(theta)
         , focusTree_(rank, numRanks_, bucketSizeFocus_, theta_)
         , global_(rank, nRanks, bucketSize, box)
-        , timer_(std::cout, rank)
     {
         if (bucketSize < bucketSizeFocus_)
         {
@@ -252,7 +191,6 @@ public:
               std::tuple<Vectors2&...> scratchBuffers)
     {
         staticChecks<KeyVec, VectorX, VectorH, Vectors1...>(scratchBuffers);
-        timer_.start();
         auto& sfcOrder = std::get<sizeof...(Vectors2) - 1>(scratchBuffers);
         using ReorderFunctor_t =
             typename AccelSwitchType<Accelerator, SfcSorter,
@@ -260,17 +198,14 @@ public:
         ReorderFunctor_t reorderer(sfcOrder);
 
         auto scratch = discardLastElement(scratchBuffers);
-        timer_.step("domain::prolog");
 
         auto [exchangeStart, keyView] =
             distribute(reorderer, particleKeys, x, y, z, std::tuple_cat(std::tie(h), particleProperties), scratch);
         // h is already reordered here for use in halo discovery
         reorderArrays(reorderer, exchangeStart, 0, std::tie(h), scratch);
-        timer_.step("domain::first_reorder");
 
         float invThetaEff      = invThetaMinMac(theta_);
         std::vector<int> peers = findPeersMac(myRank_, global_.assignment(), global_.octree(), box(), invThetaEff);
-        timer_.step("domain::find_peers");
 
         if (firstCall_)
         {
@@ -278,26 +213,18 @@ public:
                                 invThetaEff, std::get<0>(scratch));
         }
         focusTree_.updateTree(peers, global_.assignment(), global_.treeLeaves());
-        timer_.step("domain::focus_tree");
         focusTree_.updateCounts(keyView, global_.treeLeaves(), global_.nodeCounts(), std::get<0>(scratch));
-        timer_.step("domain::focus_counts");
         focusTree_.updateMinMac(box(), global_.assignment(), global_.treeLeaves(), invThetaEff);
-        timer_.step("domain::focus_mac");
 
         reallocate(layout_, nNodes(focusTree_.treeLeaves()) + 1, 1.01);
         halos_.discover(focusTree_.octree(), focusTree_.leafCounts(), focusTree_.assignment(), layout_, box(),
                         rawPtr(h), std::get<0>(scratch));
-        timer_.step("domain::halo_discover");
         halos_.computeLayout(focusTree_.treeLeaves(), focusTree_.leafCounts(), focusTree_.assignment(), peers, layout_);
-        timer_.step("domain::halo_layout");
 
         updateLayout(reorderer, exchangeStart, keyView, particleKeys, std::tie(h),
                      std::tuple_cat(std::tie(x, y, z), particleProperties), scratch);
-        timer_.step("domain::reorder");
         setupHalos(particleKeys, x, y, z, h, scratch);
-        timer_.step("domain::halo_exchange");
         firstCall_ = false;
-        timer_.stop();
     }
 
     template<class KeyVec, class VectorX, class VectorH, class VectorM, class... Vectors1, class... Vectors2>
@@ -311,7 +238,6 @@ public:
                   std::tuple<Vectors2&...> scratchBuffers)
     {
         staticChecks<KeyVec, VectorX, VectorH, VectorM, Vectors1...>(scratchBuffers);
-        timer_.start();
         auto& sfcOrder = std::get<sizeof...(Vectors2) - 1>(scratchBuffers);
         using ReorderFunctor_t =
             typename AccelSwitchType<Accelerator, SfcSorter,
@@ -319,16 +245,13 @@ public:
         ReorderFunctor_t reorderer(sfcOrder);
 
         auto scratch = discardLastElement(scratchBuffers);
-        timer_.step("domain::prolog");
 
         auto [exchangeStart, keyView] =
             distribute(reorderer, particleKeys, x, y, z, std::tuple_cat(std::tie(h, m), particleProperties), scratch);
         reorderArrays(reorderer, exchangeStart, 0, std::tie(x, y, z, h, m), scratch);
-        timer_.step("domain::first_reorder");
 
         float invThetaEff      = invThetaVecMac(theta_);
         std::vector<int> peers = findPeersMac(myRank_, global_.assignment(), global_.octree(), box(), invThetaEff);
-        timer_.step("domain::find_peers");
 
         if (firstCall_)
         {
@@ -345,34 +268,24 @@ public:
             }
         }
         focusTree_.updateMinMac(box(), global_.assignment(), global_.treeLeaves(), invThetaEff);
-        timer_.step("domain::focus_tree_min_mac");
         focusTree_.updateTree(peers, global_.assignment(), global_.treeLeaves());
-        timer_.step("domain::focus_tree");
         focusTree_.updateCounts(keyView, global_.treeLeaves(), global_.nodeCounts(), std::get<0>(scratch));
-        timer_.step("domain::focus_counts");
         focusTree_.updateCenters(rawPtr(x), rawPtr(y), rawPtr(z), rawPtr(m), global_.assignment(), global_.octree(),
                                  box(), std::get<0>(scratch), std::get<1>(scratch));
-        timer_.step("domain::focus_centers");
         focusTree_.updateMacs(box(), global_.assignment(), global_.treeLeaves());
-        timer_.step("domain::focus_macs");
 
         reallocate(layout_, nNodes(focusTree_.treeLeaves()) + 1, 1.01);
         halos_.discover(focusTree_.octree(), focusTree_.leafCounts(), focusTree_.assignment(), layout_, box(),
                         rawPtr(h), std::get<0>(scratch));
-        timer_.step("domain::halo_discover");
         focusTree_.addMacs(halos_.haloFlags());
         halos_.computeLayout(focusTree_.treeLeaves(), focusTree_.leafCounts(), focusTree_.assignment(), peers, layout_);
-        timer_.step("domain::halo_layout");
 
         // diagnostics(keyView.size(), peers);
 
         updateLayout(reorderer, exchangeStart, keyView, particleKeys, std::tie(x, y, z, h, m), particleProperties,
                      scratch);
-        timer_.step("domain::reorder");
         setupHalos(particleKeys, x, y, z, h, scratch);
-        timer_.step("domain::halo_exchange");
         firstCall_ = false;
-        timer_.stop();
     }
 
     //! @brief repeat the halo exchange pattern from the previous sync operation for a different set of arrays
@@ -468,7 +381,6 @@ private:
         // Global tree build and assignment
         LocalIndex newNParticlesAssigned =
             global_.assign(bufDesc_, reorderFunctor, rawPtr(keys), rawPtr(x), rawPtr(y), rawPtr(z));
-        timer_.step("domain::global_tree_build");
 
         size_t exchangeSize = std::max(x.size(), size_t(newNParticlesAssigned));
         lowMemReallocate(exchangeSize, 1.01, distributedArrays, scratchBuffers);
@@ -480,7 +392,6 @@ private:
                                           std::get<1>(scratchBuffers), rawPtr(arrays)...);
             },
             distributedArrays);
-        timer_.step("domain::distribute_particles");
     }
 
     template<class KeyVec, class VectorX, class VectorH, class... Vs>
@@ -643,8 +554,6 @@ private:
     bool firstCall_{true};
 
     std::vector<KeyType> swapKeys_;
-
-    MasterProcessTimer timer_;
 };
 
 } // namespace cstone
