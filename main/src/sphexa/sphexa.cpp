@@ -98,7 +98,7 @@ int main(int argc, char** argv)
     std::ofstream constantsFile(outDirectory + "constants.txt");
 
     //! @brief evaluate user choice for different kind of actions
-    auto simInit     = initializerFactory<Dataset>(initCond, glassBlock);
+    auto simInit     = initializerFactory<Dataset>(initCond, glassBlock, propChoice);
     auto propagator  = propagatorFactory<Domain, Dataset>(propChoice, ngmax, ng0, output, rank);
     auto fileWriter  = fileWriterFactory<Dataset>(ascii);
     auto observables = observablesFactory<Dataset>(initCond, constantsFile, ngmax);
@@ -190,7 +190,7 @@ void printHelp(char* name, int rank)
 
         printf("\t--theta NUM \t Gravity accuracy parameter [default 0.5 when self-gravity is active]\n\n");
 
-        printf("\t--prop STRING \t Choice of SPH propagator [default: modern SPH]. For standard SPH, use \"std\" \n\n");
+        printf("\t--prop STRING \t Choice of SPH propagator (std, ve, ve-accel, turbulence) [default: modern SPH (ve)]. For standard SPH, use \"std\" \n\n");
 
         printf("\t-s NUM \t\t int(NUM):  Number of iterations (time-steps) [200],\n\
                 \t real(NUM): Time   of simulation (time-model)\n\n");

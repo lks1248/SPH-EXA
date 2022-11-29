@@ -183,9 +183,12 @@ public:
         computeMomentumEnergy(first, last, ngmax_, d, domain.box());
         if (d.ax0 != 0.0 || d.ay0 != 0.0 || d.az0 != 0.0)
         {
-            d.ax += d.ax0;
-            d.ay += d.ay0;
-            d.az += d.az0;
+            for(size_t i = 0; i < d.ax.size(); i++)
+            {
+                d.ax[i] += d.ax0;
+                d.ay[i] += d.ay0;
+                d.az[i] += d.az0;
+            }
         }
         timer.step("MomentumAndEnergy");
 

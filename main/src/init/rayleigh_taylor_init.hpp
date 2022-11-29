@@ -172,14 +172,14 @@ void assembleRayleighTaylor(std::vector<T> x_HD, std::vector<T> y_HD, std::vecto
 
             if (i > 11)
             {
-                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::none,
-                                    cstone::BoundaryType::none, cstone::BoundaryType::none);
+                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::open,
+                                    cstone::BoundaryType::open, cstone::BoundaryType::open);
                 assembleCube<T>(start, end, temp, 1, x_HD, y_HD, z_HD, d.x, d.y, d.z);
             }
             else
             {
-                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::none,
-                                    cstone::BoundaryType::none, cstone::BoundaryType::none);
+                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::open,
+                                    cstone::BoundaryType::open, cstone::BoundaryType::open);
                 assembleCube<T>(start, end, temp, 1, x_LD, y_LD, z_LD, d.x, d.y, d.z);
             }
         }
@@ -206,9 +206,10 @@ class RayleighTaylorGlass : public ISimInitializer<Dataset>
     std::map<std::string, double> constants_;
 
 public:
-    RayleighTaylorGlass(std::string initBlock)
+    RayleighTaylorGlass(std::string initBlock, std::string propChoice)
         : glassBlock(initBlock)
     {
+        assert(propChoice == "ve-accel");
         constants_ = RayleighTaylorConstants();
     }
 
