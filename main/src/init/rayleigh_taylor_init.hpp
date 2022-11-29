@@ -110,8 +110,6 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     }
 }
 
-
-
 template<class T, class Dataset>
 auto makeHalfDenseTemplateRT(std::vector<T> x, std::vector<T> y, std::vector<T> z, size_t blockSize)
 {
@@ -159,8 +157,8 @@ auto makeHalfDenseTemplateRT(std::vector<T> x, std::vector<T> y, std::vector<T> 
  * @params x_LD, y_LD, z_HD:     x, y and z coordinate vector of the low density template
  */
 template<class T, class Dataset>
-void assembleRayleighTaylor(std::vector<T> x_HD, std::vector<T> y_HD, std::vector<T> z_HD, std::vector<T> x_LD,
-                             std::vector<T> y_LD, std::vector<T> z_LD, Dataset& d, size_t start, size_t end,
+void assembleRayleighTaylor(std::vector<T>& x_HD, std::vector<T>& y_HD, std::vector<T>& z_HD, std::vector<T>& x_LD,
+                             std::vector<T>& y_LD, std::vector<T>& z_LD, Dataset& d, size_t start, size_t end,
                              const std::map<std::string, double>& constants)
 {
     for (size_t i = 0; i < 24; i++)
@@ -209,7 +207,11 @@ public:
     RayleighTaylorGlass(std::string initBlock, std::string propChoice)
         : glassBlock(initBlock)
     {
-        assert(propChoice == "ve-accel");
+        if (propChoice != "ve-accel")
+        {
+            std::cout << "\n ERROR: In RayleighTaylor test (--init RT) the SPH propagator have to be 've-accel', but now it is '" << propChoice << "'. Please, add the option '--prop ve-accel' in your execution.\n" << std::endl;
+            exit(-1);
+        }
         constants_ = RayleighTaylorConstants();
     }
 

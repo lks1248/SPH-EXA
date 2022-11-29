@@ -118,7 +118,7 @@ void initKelvinHelmholtzFields(Dataset& d, const std::map<std::string, double>& 
 }
 
 template<class T, class Dataset>
-auto makeHalfDenseTemplate(std::vector<T> x, std::vector<T> y, std::vector<T> z, size_t blockSize)
+auto makeHalfDenseTemplateKH(std::vector<T> x, std::vector<T> y, std::vector<T> z, size_t blockSize)
 {
     using KeyType = typename Dataset::KeyType;
 
@@ -177,14 +177,14 @@ void assembleKelvinHelmholtz(std::vector<T>& x_HD, std::vector<T>& y_HD, std::ve
             T jFloat = static_cast<T>(j);
             if (i < 12 && i > 3)
             {
-                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::periodic,
-                                    cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
+                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::open,
+                                    cstone::BoundaryType::open, cstone::BoundaryType::open);
                 assembleCube<T>(start, end, temp, 1, x_HD, y_HD, z_HD, d.x, d.y, d.z);
             }
             else
             {
-                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::periodic,
-                                    cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
+                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::open,
+                                    cstone::BoundaryType::open, cstone::BoundaryType::open);
                 assembleCube<T>(start, end, temp, 1, x_LD, y_LD, z_LD, d.x, d.y, d.z);
             }
         }
@@ -192,8 +192,15 @@ void assembleKelvinHelmholtz(std::vector<T>& x_HD, std::vector<T>& y_HD, std::ve
 }
 std::map<std::string, double> KelvinHelmholtzConstants()
 {
-    return {{"rhoInt", 2.},     {"rhoExt", 1.},          {"vxExt", 0.5}, {"vxInt", -0.5},
-            {"gamma", 5. / 3.}, {"firstTimeStep", 1e-9}, {"p", 2.5},     {"omega0", 0.01}};
+    return {{"rhoInt", 2.},
+            {"rhoExt", 1.},
+            {"vxExt", 0.5},
+            {"vxInt", -0.5},
+            {"gamma", 5. / 3.},
+            {"firstTimeStep", 1e-9},
+            {"p", 2.5},
+            {"omega0", 0.01}
+    };
 }
 
 template<class Dataset>
@@ -225,7 +232,7 @@ public:
                                  cstone::BoundaryType::periodic);
         auto [keyStart, keyEnd] = partitionRange(cstone::nodeRange<KeyType>(0), rank, numRanks);
 
-        auto [xHalf, yHalf, zHalf] = makeHalfDenseTemplate<T, Dataset>(xBlock, yBlock, zBlock, blockSize);
+        auto [xHalf, yHalf, zHalf] = makeHalfDenseTemplateKH<T, Dataset>(xBlock, yBlock, zBlock, blockSize);
         assembleKelvinHelmholtz(xBlock, yBlock, zBlock, xHalf, yHalf, zHalf, d, keyStart, keyEnd, constants_);
 
         size_t npartInner   = 128 * xBlock.size();
