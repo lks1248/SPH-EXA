@@ -55,7 +55,7 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     T gamma         = constants.at("gamma");
     T p0            = constants.at("p0");
     T y0            = constants.at("y0");
-    T vy0           = constants.at("vy0");
+    //T ay0           = constants.at("ay0");
 
     size_t ng0   = 100;
     T      hUp   = 0.5 * std::cbrt(3. * ng0 * massPart / 4. / M_PI / rhoUp);
@@ -85,7 +85,9 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
 
         if (d.y[i] < 0.75)
         {
-            T p = p0 + vy0 * rhoDown * (y0 - d.y[i]);
+            //T p = p0 + ay0 * rhoDown * (y0 - d.y[i]);
+
+            T p = p0 + rhoDown * (y0 - d.y[i]);
             T u = p / ((gamma - 1.) * rhoDown);
 
             d.h[i]    = hDown;
@@ -93,7 +95,9 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
         }
         else
         {
-            T p = p0 + vy0 * rhoUp * (y0 - d.y[i]);
+            //T p = p0 + ay0 * rhoUp * (y0 - d.y[i]);
+
+            T p = p0 + rhoUp * (y0 - d.y[i]);
             T u = p / ((gamma - 1.) * rhoUp);
 
             d.h[i]    = hUp;
@@ -191,7 +195,7 @@ std::map<std::string, double> RayleighTaylorConstants()
             {"p0", 2.5},
             {"y0", 0.75},
             {"omega0", 0.0025},
-            {"vy0", -0.5}
+            {"ay0", -0.5}
     };
 }
 
@@ -216,7 +220,7 @@ public:
 
         T rhoUp = constants_.at("rhoUp");
 
-        d.vy0 = constants_.at("vy0");
+        d.ay0 = constants_.at("ay0");
 
         std::vector<T> xBlock, yBlock, zBlock;
         fileutils::readTemplateBlock(glassBlock, xBlock, yBlock, zBlock);
