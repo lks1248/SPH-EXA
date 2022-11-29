@@ -37,6 +37,7 @@
 #include "ipropagator.hpp"
 #include "std_hydro.hpp"
 #include "ve_hydro.hpp"
+#include "ve_accel_hydro.hpp"
 #ifdef SPH_EXA_HAVE_H5PART
 #include "turb_ve.hpp"
 #endif
@@ -52,7 +53,14 @@ propagatorFactory(const std::string& choice, size_t ngmax, size_t ng0, std::ostr
     {
         return std::make_unique<HydroVeProp<DomainType, ParticleDataType>>(ngmax, ng0, output, rank);
     }
-    if (choice == "std") { return std::make_unique<HydroProp<DomainType, ParticleDataType>>(ngmax, ng0, output, rank); }
+    if (choice == "ve-accel")
+    {
+        return std::make_unique<HydroVeAccelProp<DomainType, ParticleDataType>>(ngmax, ng0, output, rank);
+    }
+    if (choice == "std")
+    {
+        return std::make_unique<HydroProp<DomainType, ParticleDataType>>(ngmax, ng0, output, rank);
+    }
     if (choice == "turbulence")
     {
 #ifdef SPH_EXA_HAVE_H5PART
