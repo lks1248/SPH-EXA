@@ -82,7 +82,7 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
 
         d.vy[i] = omega0 * (1. -std::cos(4 * M_PI * d.x[i])) * (1. -std::cos(4 * M_PI * d.y[i] / 3.));
 
-        if (d.y[i] < 0.75)
+        if (d.y[i] < y0)
         {
             T p = p0 + rhoDown * (y0 - d.y[i]);
             T u = p / (rhoDown * (gamma - 1.));
@@ -156,14 +156,20 @@ void assembleRayleighTaylor(std::vector<T>& x_HD, std::vector<T>& y_HD, std::vec
                              std::vector<T>& y_LD, std::vector<T>& z_LD, Dataset& d, size_t start, size_t end,
                              const std::map<std::string, double>& constants)
 {
-    for (size_t i = 0; i < 24; i++)
+
+    size_t nBlocks     = constants.at("nBlocks");
+    size_t jBlocks     = std::sqrt(nBlocks/3);
+    size_t iBlocks     = jBlocks * 3;
+    size_t halfIBlocks = iBlocks/2;
+
+    for (size_t i = 0; i < iBlocks; i++)
     {
-        for (size_t j = 0; j < 8; j++)
+        for (size_t j = 0; j < jBlocks; j++)
         {
             T iFloat = static_cast<T>(i);
             T jFloat = static_cast<T>(j);
 
-            if (i > 11)
+            if (i >= halfIBlocks)
             {
                 cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::open,
                                     cstone::BoundaryType::open, cstone::BoundaryType::open);
@@ -188,7 +194,11 @@ std::map<std::string, double> RayleighTaylorConstants()
             {"p0", 2.5},
             {"y0", 0.75},
             {"omega0", 0.0025},
-            {"ay0", -0.5}
+            {"ay0", -0.5},
+            {"nBlocks", 192},
+            {"xSize", 0.5},
+            {"ySize", 1.5},
+            {"zSize", 0.0625}
     };
 }
 
@@ -216,7 +226,13 @@ public:
         using T       = typename Dataset::RealType;
         auto& d       = simData.hydro;
 
-        T rhoUp = constants_.at("rhoUp");
+        T rhoUp   = constants_.at("rhoUp");
+
+        T xSize   = constants_.at("xSize");
+        T ySize   = constants_.at("ySize");
+        T zSize   = constants_.at("zSize");
+
+        size_t halfBlocks = constants_.at("nBlocks") / 2;
 
         d.ay0 = constants_.at("ay0");
 
@@ -224,17 +240,17 @@ public:
         fileutils::readTemplateBlock(glassBlock, xBlock, yBlock, zBlock);
         size_t blockSize = xBlock.size();
 
-        cstone::Box<T> globalBox(0,  0.5, 0, 1.5, 0, 0.0625, cstone::BoundaryType::periodic, cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
+        cstone::Box<T> globalBox(0,  xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic, cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
         auto [keyStart, keyEnd] = partitionRange(cstone::nodeRange<KeyType>(0), rank, numRanks);
 
         auto [xHalf, yHalf, zHalf] = makeHalfDenseTemplateRT<T, Dataset>(xBlock, yBlock, zBlock, blockSize);
         assembleRayleighTaylor(xBlock, yBlock, zBlock, xHalf, yHalf, zHalf, d, keyStart, keyEnd, constants_);
 
-        size_t npartUp      = 96 * xBlock.size();
-        T      volumeHD     = 0.5 * 0.75 * 0.0625; // (x_size * y_size * z_size)
+        size_t npartUp      = halfBlocks * xBlock.size();
+        T      volumeHD     = xSize * constants_.at("y0") * zSize; // (x_size * y_size * z_size) in the high-density zone
         T      particleMass = volumeHD * rhoUp / npartUp;
 
-        size_t totalNPart = 96 * (xBlock.size() + xHalf.size());
+        size_t totalNPart = halfBlocks * (xBlock.size() + xHalf.size());
         d.resize(totalNPart);
         initRayleighTaylorFields(d, constants_, particleMass);
 
