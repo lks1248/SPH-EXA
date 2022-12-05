@@ -224,7 +224,7 @@ public:
         fileutils::readTemplateBlock(glassBlock, xBlock, yBlock, zBlock);
         size_t blockSize = xBlock.size();
 
-        cstone::Box<T> globalBox(0,  0.5, 0, 1.5, 0, 0.0625, cstone::BoundaryType::periodic, cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
+        cstone::Box<T> globalBox(0,  0.5, 0, 1.5, 0, 0.0625, cstone::BoundaryType::periodic, cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
         auto [keyStart, keyEnd] = partitionRange(cstone::nodeRange<KeyType>(0), rank, numRanks);
 
         auto [xHalf, yHalf, zHalf] = makeHalfDenseTemplateRT<T, Dataset>(xBlock, yBlock, zBlock, blockSize);
