@@ -147,7 +147,7 @@ std::unique_ptr<IObservables<Dataset>> observablesFactory(const std::string& tes
 
     if (testCase == "KH") { return std::make_unique<TimeEnergyGrowth<Dataset>>(constantsFile); }
 
-    if (testCase == "RT") { return std::make_unique<TimeVelocitiesGrowthRT<Dataset>>(constantsFile, ngmax); }
+    //if (testCase == "RT") { return std::make_unique<TimeVelocitiesGrowthRT<Dataset>>(constantsFile, ngmax); }
 
     return std::make_unique<TimeAndEnergy<Dataset>>(constantsFile);
 }
