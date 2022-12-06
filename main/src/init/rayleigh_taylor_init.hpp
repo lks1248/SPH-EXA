@@ -153,8 +153,8 @@ auto makeHalfDenseTemplateRT(std::vector<T> x, std::vector<T> y, std::vector<T> 
  */
 template<class T, class Dataset>
 void assembleRayleighTaylor(std::vector<T>& x_HD, std::vector<T>& y_HD, std::vector<T>& z_HD, std::vector<T>& x_LD,
-                             std::vector<T>& y_LD, std::vector<T>& z_LD, Dataset& d, size_t start, size_t end,
-                             const std::map<std::string, double>& constants)
+                            std::vector<T>& y_LD, std::vector<T>& z_LD, Dataset& d, size_t start, size_t end,
+                            const std::map<std::string, double>& constants)
 {
 
     size_t nBlocks     = constants.at("nBlocks");
@@ -196,6 +196,7 @@ std::map<std::string, double> RayleighTaylorConstants()
             {"omega0", 0.0025},
             {"ay0", -0.5},
             {"nBlocks", 192},
+            {"blockSize", 0.0625},
             {"xSize", 0.5},
             {"ySize", 1.5},
             {"zSize", 0.0625}
@@ -226,24 +227,29 @@ public:
         using T       = typename Dataset::RealType;
         auto& d       = simData.hydro;
 
-        T rhoUp   = constants_.at("rhoUp");
+        T rhoUp = constants_.at("rhoUp");
 
-        T xSize   = constants_.at("xSize");
-        T ySize   = constants_.at("ySize");
-        T zSize   = constants_.at("zSize");
+        T blockSize = constants_.at("blockSize");
+        T xSize     = constants_.at("xSize");
+        T ySize     = constants_.at("ySize");
+        T zSize     = constants_.at("zSize");
 
-        size_t halfBlocks = constants_.at("nBlocks") / 2;
+        size_t xBlocks = xSize / blockSize;
+        size_t yBlocks = ySize / blockSize;
+        size_t zBlocks = zSize / blockSize;
+
+        size_t nBlocks    = xBlocks * yBlocks * zBlocks;
+        size_t halfBlocks = nBlocks / 2;
 
         d.ay0 = constants_.at("ay0");
 
         std::vector<T> xBlock, yBlock, zBlock;
         fileutils::readTemplateBlock(glassBlock, xBlock, yBlock, zBlock);
-        size_t blockSize = xBlock.size();
 
         cstone::Box<T> globalBox(0,  xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic, cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
         auto [keyStart, keyEnd] = partitionRange(cstone::nodeRange<KeyType>(0), rank, numRanks);
 
-        auto [xHalf, yHalf, zHalf] = makeHalfDenseTemplateRT<T, Dataset>(xBlock, yBlock, zBlock, blockSize);
+        auto [xHalf, yHalf, zHalf] = makeHalfDenseTemplateRT<T, Dataset>(xBlock, yBlock, zBlock, xBlock.size());
         assembleRayleighTaylor(xBlock, yBlock, zBlock, xHalf, yHalf, zHalf, d, keyStart, keyEnd, constants_);
 
         size_t npartUp      = halfBlocks * xBlock.size();
