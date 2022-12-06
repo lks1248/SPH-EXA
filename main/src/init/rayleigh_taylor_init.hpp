@@ -154,22 +154,16 @@ auto makeHalfDenseTemplateRT(std::vector<T> x, std::vector<T> y, std::vector<T> 
 template<class T, class Dataset>
 void assembleRayleighTaylor(std::vector<T>& x_HD, std::vector<T>& y_HD, std::vector<T>& z_HD, std::vector<T>& x_LD,
                             std::vector<T>& y_LD, std::vector<T>& z_LD, Dataset& d, size_t start, size_t end,
-                            const std::map<std::string, double>& constants)
+                            size_t nBlocks, size_t xBlocks, size_t yBlocks, size_t zBlocks)
 {
-
-    size_t nBlocks     = constants.at("nBlocks");
-    size_t jBlocks     = std::sqrt(nBlocks/3);
-    size_t iBlocks     = jBlocks * 3;
-    size_t halfIBlocks = iBlocks/2;
-
-    for (size_t i = 0; i < iBlocks; i++)
+    for (size_t i = 0; i < yBlocks; i++)
     {
-        for (size_t j = 0; j < jBlocks; j++)
+        for (size_t j = 0; j < xBlocks; j++)
         {
             T iFloat = static_cast<T>(i);
             T jFloat = static_cast<T>(j);
 
-            if (i >= halfIBlocks)
+            if (i >= yBlocks / 2)
             {
                 cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::open,
                                     cstone::BoundaryType::open, cstone::BoundaryType::open);
@@ -195,7 +189,6 @@ std::map<std::string, double> RayleighTaylorConstants()
             {"y0", 0.75},
             {"omega0", 0.0025},
             {"ay0", -0.5},
-            {"nBlocks", 192},
             {"blockSize", 0.0625},
             {"xSize", 0.5},
             {"ySize", 1.5},
@@ -250,7 +243,7 @@ public:
         auto [keyStart, keyEnd] = partitionRange(cstone::nodeRange<KeyType>(0), rank, numRanks);
 
         auto [xHalf, yHalf, zHalf] = makeHalfDenseTemplateRT<T, Dataset>(xBlock, yBlock, zBlock, xBlock.size());
-        assembleRayleighTaylor(xBlock, yBlock, zBlock, xHalf, yHalf, zHalf, d, keyStart, keyEnd, constants_);
+        assembleRayleighTaylor(xBlock, yBlock, zBlock, xHalf, yHalf, zHalf, d, keyStart, keyEnd, nBlocks, xBlocks, yBlocks, zBlocks);
 
         size_t npartUp      = halfBlocks * xBlock.size();
         T      volumeHD     = xSize * constants_.at("y0") * zSize; // (x_size * y_size * z_size) in the high-density zone
