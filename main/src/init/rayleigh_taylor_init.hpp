@@ -195,7 +195,7 @@ std::map<std::string, double> RayleighTaylorConstants()
             {"blockSize", 0.0625},
             {"xSize", 0.5},
             {"ySize", 1.5},
-            {"zSize", 0.0625}
+            {"zSize", 0.5}
     };
 }
 
