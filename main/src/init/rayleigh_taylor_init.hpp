@@ -154,7 +154,7 @@ auto makeHalfDenseTemplateRT(std::vector<T> x, std::vector<T> y, std::vector<T> 
 template<class T, class Dataset>
 void assembleRayleighTaylor(std::vector<T>& x_HD, std::vector<T>& y_HD, std::vector<T>& z_HD, std::vector<T>& x_LD,
                             std::vector<T>& y_LD, std::vector<T>& z_LD, Dataset& d, size_t start, size_t end,
-                            size_t nBlocks, size_t xBlocks, size_t yBlocks, size_t zBlocks)
+                            size_t xBlocks, size_t yBlocks, size_t zBlocks)
 {
     for (size_t x = 0; x < xBlocks; x++)
     {
@@ -195,7 +195,7 @@ std::map<std::string, double> RayleighTaylorConstants()
             {"blockSize", 0.0625},
             {"xSize", 0.5},
             {"ySize", 1.5},
-            {"zSize", 0.5}
+            {"zSize", 0.0625}
     };
 }
 
@@ -246,7 +246,7 @@ public:
         auto [keyStart, keyEnd] = partitionRange(cstone::nodeRange<KeyType>(0), rank, numRanks);
 
         auto [xHalf, yHalf, zHalf] = makeHalfDenseTemplateRT<T, Dataset>(xBlock, yBlock, zBlock, xBlock.size());
-        assembleRayleighTaylor(xBlock, yBlock, zBlock, xHalf, yHalf, zHalf, d, keyStart, keyEnd, nBlocks, xBlocks, yBlocks, zBlocks);
+        assembleRayleighTaylor(xBlock, yBlock, zBlock, xHalf, yHalf, zHalf, d, keyStart, keyEnd, xBlocks, yBlocks, zBlocks);
 
         size_t npartUp      = halfBlocks * xBlock.size();
         T      volumeHD     = xSize * constants_.at("y0") * zSize; // (x_size * y_size * z_size) in the high-density zone
