@@ -156,24 +156,27 @@ void assembleRayleighTaylor(std::vector<T>& x_HD, std::vector<T>& y_HD, std::vec
                             std::vector<T>& y_LD, std::vector<T>& z_LD, Dataset& d, size_t start, size_t end,
                             size_t nBlocks, size_t xBlocks, size_t yBlocks, size_t zBlocks)
 {
-    for (size_t i = 0; i < yBlocks; i++)
+    for (size_t x = 0; x < xBlocks; x++)
     {
-        for (size_t j = 0; j < xBlocks; j++)
+        for (size_t y = 0; y < yBlocks; y++)
         {
-            T iFloat = static_cast<T>(i);
-            T jFloat = static_cast<T>(j);
+            for (size_t z = 0; z < zBlocks; z++)
+            {
+                T xFloat = static_cast<T>(x);
+                T yFloat = static_cast<T>(y);
+                T zFloat = static_cast<T>(z);
 
-            if (i >= yBlocks / 2)
-            {
-                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::open,
-                                    cstone::BoundaryType::open, cstone::BoundaryType::open);
-                assembleCube<T>(start, end, temp, 1, x_HD, y_HD, z_HD, d.x, d.y, d.z);
-            }
-            else
-            {
-                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::open,
-                                    cstone::BoundaryType::open, cstone::BoundaryType::open);
-                assembleCube<T>(start, end, temp, 1, x_LD, y_LD, z_LD, d.x, d.y, d.z);
+                cstone::Box<T> temp(xFloat, xFloat + 1.0, yFloat, yFloat + 1.0, zFloat, zFloat + 1.0,
+                                    cstone::BoundaryType::open, cstone::BoundaryType::open, cstone::BoundaryType::open);
+
+                if (y < yBlocks / 2)
+                {
+                    assembleCube<T>(start, end, temp, 1, x_LD, y_LD, z_LD, d.x, d.y, d.z);
+                }
+                else
+                {
+                    assembleCube<T>(start, end, temp, 1, x_HD, y_HD, z_HD, d.x, d.y, d.z);
+                }
             }
         }
     }
