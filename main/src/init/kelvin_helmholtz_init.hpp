@@ -73,7 +73,7 @@ void initKelvinHelmholtzFields(Dataset& d, const std::map<std::string, double>& 
     d.minDt    = firstTimeStep;
     d.minDt_m1 = firstTimeStep;
 
-    auto cv = sph::idealGasCv(d.muiConst);
+    auto cv = sph::idealGasCv(d.muiConst, d.gamma);
 
 #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < d.x.size(); i++)
@@ -230,7 +230,11 @@ public:
 
         cstone::Box<T> globalBox(0,  1, 0, 1, 0, 0.0625, cstone::BoundaryType::periodic, cstone::BoundaryType::periodic,
                                  cstone::BoundaryType::periodic);
-        auto [keyStart, keyEnd] = partitionRange(cstone::nodeRange<KeyType>(0), rank, numRanks);
+
+        unsigned level             = cstone::log8ceil<KeyType>(100 * numRanks);
+        auto     initialBoundaries = cstone::initialDomainSplits<KeyType>(numRanks, level);
+        KeyType  keyStart          = initialBoundaries[rank];
+        KeyType  keyEnd            = initialBoundaries[rank + 1];
 
         auto [xHalf, yHalf, zHalf] = makeHalfDenseTemplateKH<T, Dataset>(xBlock, yBlock, zBlock, blockSize);
         assembleKelvinHelmholtz(xBlock, yBlock, zBlock, xHalf, yHalf, zHalf, d, keyStart, keyEnd, constants_);

@@ -134,7 +134,6 @@ std::unique_ptr<IObservables<Dataset>> observablesFactory(const std::string& tes
             return std::make_unique<GravWaves<Dataset>>(constantsFile, attrValue[1], attrValue[2]);
         }
     }
-#endif
 
     if (testCase == "wind-shock")
     {
@@ -144,6 +143,9 @@ std::unique_ptr<IObservables<Dataset>> observablesFactory(const std::string& tes
         double bubbleMass   = bubbleVolume * rhoInt;
         return std::make_unique<WindBubble<Dataset>>(constantsFile, rhoInt, uExt, bubbleMass);
     }
+#endif
+
+    if (testCase == "nbody") { return std::make_unique<IObservables<Dataset>>(); }
 
     if (testCase == "KH") { return std::make_unique<TimeEnergyGrowth<Dataset>>(constantsFile); }
 
