@@ -101,7 +101,7 @@ TEST(Grids, assembleRectangle)
     using KeyType = unsigned;
     cstone::Box<T> box{-1, 1};
 
-    std::tuple<int, int, int> multiplicity = {22,23,11};
+    std::tuple<int, int, int> multiplicity = {20, 20, 20};
 
     std::vector<T> xb{0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
     std::vector<T> yb{0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
@@ -130,6 +130,29 @@ TEST(Grids, assembleRectangle)
     cstone::computeSfcKeys(x1.data(), y1.data(), z1.data(), ksfc, x1.size(), box);
     cstone::computeSfcKeys(x2.data(), y2.data(), z2.data(), ksfc + x1.size(), x2.size(), box);
     cstone::computeSfcKeys(x3.data(), y3.data(), z3.data(), ksfc + x1.size() + x2.size(), x3.size(), box);
+
+    // explicit construction
+    std::vector<T> X, Y, Z;
+    for (int i = 0; i < std::get<0>(multiplicity); i++)
+    {
+        for (int j = 0; j < std::get<1>(multiplicity); ++j)
+        {
+            for (int k = 0; k < std::get<2>(multiplicity); ++k)
+            {
+                auto selectBox = cstone::FBox<T>(
+                    box.lx() / std::get<0>(multiplicity) * i - 1, box.lx() / std::get<0>(multiplicity) * (i + 1) - 1,
+                    box.ly() / std::get<1>(multiplicity) * j - 1, box.ly() / std::get<1>(multiplicity) * (j + 1) - 1,
+                    box.lz() / std::get<2>(multiplicity) * k - 1, box.lz() / std::get<2>(multiplicity) * (k + 1) - 1);
+                extractBlock(selectBox, box, {i, j, k}, multiplicity, (gsl::span<const T>)xb, (gsl::span<const T>)yb,
+                             (gsl::span<const T>)zb, X, Y, Z);
+            }
+        }
+    }
+
+    std::vector<KeyType> keys2(X.size());
+    auto                 ksfc2 = cstone::sfcKindPointer(keys2.data());
+    cstone::computeSfcKeys(X.data(), Y.data(), Z.data(), ksfc2, X.size(), box);
+
 
     for (size_t i = 0; i < x1.size(); ++i)
     {
