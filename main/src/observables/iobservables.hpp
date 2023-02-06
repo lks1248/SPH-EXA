@@ -32,7 +32,6 @@
 #pragma once
 
 #include "cstone/sfc/box.hpp"
-#include "io/ifile_writer.hpp"
 
 namespace sphexa
 {
@@ -42,7 +41,7 @@ class IObservables
 {
 public:
     virtual void computeAndWrite(Dataset& d, size_t firstIndex, size_t lastIndex,
-                                 cstone::Box<typename Dataset::RealType>& box) = 0;
+                                 cstone::Box<typename Dataset::RealType>& box){/* no-op */};
 
     virtual ~IObservables() = default;
 };

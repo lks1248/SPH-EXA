@@ -65,7 +65,7 @@ SPH-EXA
 │   │    └── sph
 │   └─── test                       - SPH kernel unit tests
 │
-└── src
+└── main/src
     ├── init                        - initial conditions for test cases
     ├── io                          - file output functionality
     └── sphexa                      - SPH main application front-end
@@ -140,10 +140,10 @@ Example usage:
   Runs Sedov with 100^3 particles for 1000 iterations (time-steps) with 4 OpenMP
   threads and dumps particle xyz-coordinates, density and pressure data every 10 iterations
 * ```OMP_NUM_THREADS=4 ./sphexa-cuda --init -n 100 -s 1000 -w 10 -f x,y,z,rho,p```
-  Runs Sedov with 100^3 million particles for 1000 iterations (time-steps) with 4 OpenMP
+  Runs Sedov with 100^3 particles for 1000 iterations (time-steps) with 4 OpenMP
   threads. Uses the GPU for most of the compute work.
 * ```OMP_NUM_THREADS=4 mpiexec -np 2 ./sphexa --init noh -n 100 -s 1000 -w 10```
-  Runs Noh with 100^3 million particles for 1000 iterations (time-steps) with 2 MPI ranks of 4 OpenMP
+  Runs Noh with 100^3 particles for 1000 iterations (time-steps) with 2 MPI ranks of 4 OpenMP
   threads each. Works when using MPICH. For OpenMPI, use ```mpirun```  instead.
 * ```OMP_NUM_THREADS=12 srun -Cgpu -A<your account> -n<nnodes> -c12 ./sphexa-cuda --init sedov -n 100 -s 1000 -w 10```
   Optimal runtime configuration on Piz Daint for `nnodes` GPU compute nodes. Launches 1 MPI rank with
@@ -152,6 +152,18 @@ Example usage:
   Run SPH-EXA, initializing particle data from an input file (e.g. for the Evrard collapse). Includes
   gravitational forces between particles. The angle dependent accuracy parameter theta can be specificed
   with ```--theta <value>```, the default is `0.5`.
+
+#### Restarting from checkpoint files
+
+If output to file is enabled and if the ```-f``` option is not provided, sphexa will output all conserved particle
+fields which allows restoring the simulation to the exact state at the time of writing the output.
+This includes the following fields ```x_m1, y_m1, z_m1, du_m1```.
+In order to save diskspace, sphexa can be instructed to omit these fields by setting the ```-f option```, e.g.
+```-f x,y,z,m,h,temp,alpha,vx,vy,vz```. If one wants to restart the simulation from an output file containing
+these fields, it is necessary to add the ```_m1```. We provide an example script that can be used to achieve this:
+```bash
+./scripts/add_m1.py <hdf5-output-file>
+```
 
 #### Running the unit, integration and regression tests
 

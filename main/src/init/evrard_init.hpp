@@ -72,7 +72,11 @@ void initEvrardFields(Dataset& d, const std::map<std::string, double>& constants
     std::fill(d.vy.begin(), d.vy.end(), 0.0);
     std::fill(d.vz.begin(), d.vz.end(), 0.0);
 
-    auto cv    = sph::idealGasCv(d.muiConst);
+    std::fill(d.x_m1.begin(), d.x_m1.end(), 0.0);
+    std::fill(d.y_m1.begin(), d.y_m1.end(), 0.0);
+    std::fill(d.z_m1.begin(), d.z_m1.end(), 0.0);
+
+    auto cv    = sph::idealGasCv(d.muiConst, d.gamma);
     auto temp0 = constants.at("u0") / cv;
     std::fill(d.temp.begin(), d.temp.end(), temp0);
 
@@ -85,14 +89,9 @@ void initEvrardFields(Dataset& d, const std::map<std::string, double>& constants
 #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < d.x.size(); i++)
     {
-        T radius = std::sqrt((d.x[i] * d.x[i]) + (d.y[i] * d.y[i]) + (d.z[i] * d.z[i]));
-
+        T radius        = std::sqrt((d.x[i] * d.x[i]) + (d.y[i] * d.y[i]) + (d.z[i] * d.z[i]));
         T concentration = c0 / radius;
         d.h[i]          = std::cbrt(3 / (4 * M_PI) * ng0 / concentration) * 0.5;
-
-        d.x_m1[i] = d.vx[i] * firstTimeStep;
-        d.y_m1[i] = d.vy[i] * firstTimeStep;
-        d.z_m1[i] = d.vz[i] * firstTimeStep;
     }
 }
 
@@ -136,16 +135,19 @@ public:
         fileutils::readTemplateBlock(glassBlock, xBlock, yBlock, zBlock);
         size_t blockSize = xBlock.size();
 
-        size_t                    multi1D      = std::rint(cbrtNumPart / std::cbrt(blockSize));
-        std::tuple<int, int, int> multiplicity = {multi1D, multi1D, multi1D};
+        size_t multiplicity = std::rint(cbrtNumPart / std::cbrt(blockSize));
 
         d.g = constants_.at("G");
         T r = constants_.at("r");
 
         cstone::Box<T> globalBox(-r, r, cstone::BoundaryType::open);
 
-        auto [keyStart, keyEnd] = partitionRange(cstone::nodeRange<KeyType>(0), rank, numRanks);
-        assembleRectangle<T>(keyStart, keyEnd, globalBox, multiplicity, xBlock, yBlock, zBlock, d.x, d.y, d.z);
+        unsigned level             = cstone::log8ceil<KeyType>(100 * numRanks);
+        auto     initialBoundaries = cstone::initialDomainSplits<KeyType>(numRanks, level);
+        KeyType  keyStart          = initialBoundaries[rank];
+        KeyType  keyEnd            = initialBoundaries[rank + 1];
+
+        assembleCube<T>(keyStart, keyEnd, globalBox, multiplicity, xBlock, yBlock, zBlock, d.x, d.y, d.z);
         cutSphere(r, d.x, d.y, d.z);
 
         d.numParticlesGlobal = d.x.size();

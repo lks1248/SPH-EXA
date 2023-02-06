@@ -44,8 +44,11 @@
 #include "evrard_init.hpp"
 #include "isobaric_cube_init.hpp"
 #include "wind_shock_init.hpp"
-#include "kelvin_helmholtz_init.hpp"
 #include "turbulence_init.hpp"
+#include "kelvin_helmholtz_init.hpp"
+#endif
+#ifdef SPH_EXA_HAVE_GRACKLE
+#include "evrard_cooling_init.hpp"
 #endif
 
 namespace sphexa
@@ -89,6 +92,11 @@ std::unique_ptr<ISimInitializer<Dataset>> initializerFactory(std::string testCas
         if (glassBlock.empty()) { throw std::runtime_error("need a valid glass block for evrard\n"); }
         return std::make_unique<EvrardGlassSphere<Dataset>>(glassBlock);
     }
+    if (testCase == "nbody")
+    {
+        if (glassBlock.empty()) { throw std::runtime_error("need a valid glass block for nbody\n"); }
+        return std::make_unique<SedovGlass<Dataset>>(glassBlock);
+    }
     if (testCase == "turbulence")
     {
         if (glassBlock.empty()) { throw std::runtime_error("need a valid glass block for turbulence test\n"); }
@@ -99,6 +107,13 @@ std::unique_ptr<ISimInitializer<Dataset>> initializerFactory(std::string testCas
         if (glassBlock.empty()) { throw std::runtime_error("need a valid glass block for Kelvin-Helmholtz test\n"); }
         else { return std::make_unique<KelvinHelmholtzGlass<Dataset>>(glassBlock); }
     }
+#ifdef SPH_EXA_HAVE_GRACKLE
+    if (testCase == "evrard-cooling")
+    {
+        if (glassBlock.empty()) { throw std::runtime_error("need a valid glass block for evrard\n"); }
+        return std::make_unique<EvrardGlassSphereCooling<Dataset>>(glassBlock);
+    }
+#endif
     if (std::filesystem::exists(testCase)) { return std::make_unique<FileInit<Dataset>>(testCase); }
 
 #endif

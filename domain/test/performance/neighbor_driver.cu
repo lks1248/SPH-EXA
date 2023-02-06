@@ -29,13 +29,16 @@
  * @author Sebastian Keller <sebastian.f.keller@gmail.com>
  */
 
+#include <iomanip>
 #include <iostream>
 #include <iterator>
 
 #include <thrust/device_vector.h>
 
-#include "cstone/findneighbors.hpp"
 #include "cstone/cuda/cuda_utils.cuh"
+#include "cstone/findneighbors.hpp"
+
+#include "cstone/traversal/find_neighbors.cuh"
 
 #include "../coord_samples/random.hpp"
 #include "timing.cuh"
@@ -63,45 +66,43 @@ __global__ void findNeighborsKernel(const T* x,
     findNeighbors(id, x, y, z, h, box, particleKeys, neighbors + tid * ngmax, neighborsCount + tid, n, ngmax);
 }
 
-template<class T, class KeyType>
+template<class T>
+__global__ void findNeighborsTKernel(const T* x,
+                                     const T* y,
+                                     const T* z,
+                                     const T* h,
+                                     const TreeNodeIndex* childOffsets,
+                                     const TreeNodeIndex* toLeafOrder,
+                                     const LocalIndex* layout,
+                                     const Vec3<T>* centers,
+                                     const Vec3<T>* sizes,
+                                     cstone::Box<T> box,
+                                     LocalIndex firstId,
+                                     LocalIndex lastId,
+                                     unsigned ngmax,
+                                     cstone::LocalIndex* neighbors,
+                                     unsigned* neighborsCount)
+{
+    cstone::LocalIndex tid = blockDim.x * blockIdx.x + threadIdx.x;
+    cstone::LocalIndex id  = firstId + tid;
+    if (id >= lastId) { return; }
+
+    findNeighborsT(id, x, y, z, h, childOffsets, toLeafOrder, layout, centers, sizes, box, ngmax,
+                   neighbors + tid * ngmax, neighborsCount + id);
+}
+
+template<class T, class StrongKeyType>
 void benchmarkGpu()
 {
-    using Integer = typename KeyType::ValueType;
+    using KeyType = typename StrongKeyType::ValueType;
 
     Box<T> box{0, 1, BoundaryType::periodic};
     int n = 2000000;
 
-    RandomCoordinates<T, KeyType> coords(n, box);
+    RandomCoordinates<T, StrongKeyType> coords(n, box);
     std::vector<T> h(n, 0.012);
 
     int ngmax = 200;
-    std::vector<int> neighborsGPU(ngmax * n);
-    std::vector<int> neighborsCountGPU(n);
-
-    thrust::device_vector<T> d_x(coords.x().begin(), coords.x().end());
-    thrust::device_vector<T> d_y(coords.y().begin(), coords.y().end());
-    thrust::device_vector<T> d_z(coords.z().begin(), coords.z().end());
-    thrust::device_vector<T> d_h = h;
-    thrust::device_vector<Integer> d_codes(coords.particleKeys().begin(), coords.particleKeys().end());
-
-    thrust::device_vector<LocalIndex> d_neighbors(neighborsGPU.size());
-    thrust::device_vector<unsigned> d_neighborsCount(neighborsCountGPU.size());
-
-    const auto* deviceKeys = (const KeyType*)(rawPtr(d_codes));
-
-    auto findNeighborsLambda = [&]()
-    {
-        findNeighborsKernel<<<iceil(n, 256), 256>>>(rawPtr(d_x), rawPtr(d_y), rawPtr(d_z), rawPtr(d_h), 0, n, n, box,
-                                                    deviceKeys, rawPtr(d_neighbors), rawPtr(d_neighborsCount), ngmax);
-    };
-
-    float gpuTime = timeGpu(findNeighborsLambda);
-
-    thrust::copy(d_neighborsCount.begin(), d_neighborsCount.end(), neighborsCountGPU.begin());
-
-    std::cout << "GPU time " << gpuTime / 1000 << " s" << std::endl;
-    std::copy(neighborsCountGPU.data(), neighborsCountGPU.data() + 10, std::ostream_iterator<int>(std::cout, " "));
-    std::cout << std::endl;
 
     std::vector<LocalIndex> neighborsCPU(ngmax * n);
     std::vector<unsigned> neighborsCountCPU(n);
@@ -111,24 +112,129 @@ void benchmarkGpu()
     const T* z        = coords.z().data();
     const auto* codes = (KeyType*)(coords.particleKeys().data());
 
+    unsigned bucketSize   = 64;
+    auto [csTree, counts] = computeOctree(codes, codes + n, bucketSize);
+    OctreeData<KeyType, CpuTag> octree;
+    octree.resize(nNodes(csTree));
+    updateInternalTree<KeyType>(csTree, octree.data());
+    const TreeNodeIndex* childOffsets = octree.childOffsets.data();
+    const TreeNodeIndex* toLeafOrder  = octree.internalToLeaf.data();
+
+    std::vector<LocalIndex> layout(nNodes(csTree) + 1);
+    std::exclusive_scan(counts.begin(), counts.end() + 1, layout.begin(), 0);
+
+    std::vector<Vec3<T>> centers(octree.numNodes), sizes(octree.numNodes);
+    gsl::span<const KeyType> nodeKeys(octree.prefixes.data(), octree.numNodes);
+    nodeFpCenters<KeyType>(nodeKeys, centers.data(), sizes.data(), box);
+
+    OctreeNsView<T, KeyType> nsView{octree.prefixes.data(),
+                                    octree.childOffsets.data(),
+                                    octree.internalToLeaf.data(),
+                                    octree.levelRange.data(),
+                                    layout.data(),
+                                    centers.data(),
+                                    sizes.data()};
+
     auto findNeighborsCpu = [&]()
-    { findNeighbors(x, y, z, h.data(), 0, n, n, box, codes, neighborsCPU.data(), neighborsCountCPU.data(), ngmax); };
+    {
+#pragma omp parallel for
+        for (LocalIndex i = 0; i < n; ++i)
+        {
+            findNeighbors(i, x, y, z, h.data(), nsView, box, ngmax, neighborsCPU.data() + i * ngmax,
+                          neighborsCountCPU.data() + i);
+        }
+    };
 
     float cpuTime = timeCpu(findNeighborsCpu);
 
     std::cout << "CPU time " << cpuTime << " s" << std::endl;
-    std::copy(neighborsCountCPU.data(), neighborsCountCPU.data() + 10, std::ostream_iterator<int>(std::cout, " "));
+    std::copy(neighborsCountCPU.data(), neighborsCountCPU.data() + 64, std::ostream_iterator<int>(std::cout, " "));
     std::cout << std::endl;
+
+    std::vector<cstone::LocalIndex> neighborsGPU(ngmax * n);
+    std::vector<unsigned> neighborsCountGPU(n);
+
+    thrust::device_vector<T> d_x(coords.x().begin(), coords.x().end());
+    thrust::device_vector<T> d_y(coords.y().begin(), coords.y().end());
+    thrust::device_vector<T> d_z(coords.z().begin(), coords.z().end());
+    thrust::device_vector<T> d_h = h;
+
+    thrust::device_vector<KeyType> d_prefixes             = octree.prefixes;
+    thrust::device_vector<TreeNodeIndex> d_childOffsets   = octree.childOffsets;
+    thrust::device_vector<TreeNodeIndex> d_internalToLeaf = octree.internalToLeaf;
+    thrust::device_vector<TreeNodeIndex> d_levelRange     = octree.levelRange;
+    thrust::device_vector<LocalIndex> d_layout            = layout;
+    thrust::device_vector<Vec3<T>> d_centers              = centers;
+    thrust::device_vector<Vec3<T>> d_sizes                = sizes;
+
+    OctreeNsView<T, KeyType> nsViewGpu{rawPtr(d_prefixes),   rawPtr(d_childOffsets), rawPtr(d_internalToLeaf),
+                                       rawPtr(d_levelRange), rawPtr(d_layout),       rawPtr(d_centers),
+                                       rawPtr(d_sizes)};
+
+    thrust::device_vector<LocalIndex> d_neighbors(neighborsGPU.size());
+    thrust::device_vector<unsigned> d_neighborsCount(neighborsCountGPU.size());
+
+    thrust::device_vector<KeyType> d_codes(coords.particleKeys().begin(), coords.particleKeys().end());
+    const auto* deviceKeys = (const KeyType*)(rawPtr(d_codes));
+
+    auto findNeighborsLambda = [&]()
+    {
+        // findNeighborsKernel<<<iceil(n, 256), 256>>>(rawPtr(d_x), rawPtr(d_y), rawPtr(d_z), rawPtr(d_h), 0, n, n, box,
+        //                                             deviceKeys, rawPtr(d_neighbors), rawPtr(d_neighborsCount),
+        //                                             ngmax);
+        // findNeighborsTKernel<<<iceil(n, 128), 128>>>(rawPtr(d_x), rawPtr(d_y), rawPtr(d_z), rawPtr(d_h),
+        //                                              rawPtr(d_childOffsets), rawPtr(d_toLeafOrder), rawPtr(d_layout),
+        //                                              rawPtr(d_centers), rawPtr(d_sizes), box, 0, n, ngmax,
+        //                                              rawPtr(d_neighbors), rawPtr(d_neighborsCount));
+
+        findNeighborsBT(0, n, rawPtr(d_x), rawPtr(d_y), rawPtr(d_z), rawPtr(d_h), nsViewGpu, box,
+                        rawPtr(d_neighborsCount), rawPtr(d_neighbors), ngmax);
+    };
+
+    float gpuTime = timeGpu(findNeighborsLambda);
+
+    thrust::copy(d_neighborsCount.begin(), d_neighborsCount.end(), neighborsCountGPU.begin());
+    thrust::copy(d_neighbors.begin(), d_neighbors.end(), neighborsGPU.begin());
+
+    std::cout << "GPU time " << gpuTime / 1000 << " s" << std::endl;
+    std::copy(neighborsCountGPU.data(), neighborsCountGPU.data() + 64, std::ostream_iterator<int>(std::cout, " "));
+    std::cout << std::endl;
+
+    int numFails     = 0;
+    int numFailsList = 0;
+    for (int i = 0; i < n; ++i)
+    {
+        std::sort(neighborsCPU.data() + i * ngmax, neighborsCPU.data() + i * ngmax + neighborsCountCPU[i]);
+
+        std::vector<cstone::LocalIndex> nilist(neighborsCountGPU[i]);
+        for (unsigned j = 0; j < neighborsCountGPU[i]; ++j)
+        {
+            size_t warpOffset = (i / TravConfig::targetSize) * TravConfig::targetSize * ngmax;
+            size_t laneOffset = i % TravConfig::targetSize;
+            nilist[j]         = neighborsGPU[warpOffset + TravConfig::targetSize * j + laneOffset];
+        }
+        std::sort(nilist.begin(), nilist.end());
+
+        if (neighborsCountGPU[i] != neighborsCountCPU[i])
+        {
+            std::cout << i << " " << neighborsCountGPU[i] << " " << neighborsCountCPU[i] << std::endl;
+            numFails++;
+        }
+
+        if (!std::equal(begin(nilist), end(nilist), neighborsCPU.begin() + i * ngmax)) { numFailsList++; }
+    }
 
     bool allEqual = std::equal(begin(neighborsCountGPU), end(neighborsCountGPU), begin(neighborsCountCPU));
     if (allEqual)
         std::cout << "Neighbor counts: PASS\n";
     else
-        std::cout << "Neighbor counts: FAIL\n";
+        std::cout << "Neighbor counts: FAIL " << numFails << std::endl;
+
+    std::cout << "numFailsList " << numFailsList << std::endl;
 }
 
 int main()
 {
-    benchmarkGpu<double, MortonKey<uint64_t>>();
-    benchmarkGpu<double, HilbertKey<uint64_t>>();
+    // benchmarkGpu<double, HilbertKey<uint64_t>>();
+    benchmarkGpu<float, HilbertKey<uint64_t>>();
 }

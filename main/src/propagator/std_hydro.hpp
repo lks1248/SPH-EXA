@@ -118,6 +118,7 @@ public:
             domain.sync(get<"keys">(d), get<"x">(d), get<"y">(d), get<"z">(d), get<"h">(d),
                         std::tuple_cat(std::tie(get<"m">(d)), get<ConservedFields>(d)), get<DependentFields>(d));
         }
+        d.treeView = domain.octreeNsViewAcc();
     }
 
     void step(DomainType& domain, DataType& simData) override
@@ -136,7 +137,7 @@ public:
         fill(get<"m">(d), 0, first, d.m[first]);
         fill(get<"m">(d), last, domain.nParticlesWithHalos(), d.m[first]);
 
-        findNeighborsSfc<T, KeyType>(first, last, ngmax_, d.x, d.y, d.z, d.h, d.keys, d.neighbors, d.nc, domain.box());
+        findNeighborsSfc(first, last, ngmax_, d, domain.box());
         timer.step("FindNeighbors");
 
         computeDensity(first, last, ngmax_, d, domain.box());
@@ -176,11 +177,32 @@ public:
         timer.stop();
     }
 
-    void prepareOutput(DataType& simData, size_t first, size_t last, const cstone::Box<T>& box) override
+    void saveFields(IFileWriter* writer, size_t first, size_t last, DataType& simData,
+                    const cstone::Box<T>& box) override
     {
-        auto& d = simData.hydro;
-        transferToHost(d, first, last, conservedFields());
-        transferToHost(d, first, last, {"rho", "p", "c", "du", "ax", "ay", "az", "nc"});
+        auto&            d             = simData.hydro;
+        auto             fieldPointers = d.data();
+        std::vector<int> outputFields  = d.outputFieldIndices;
+
+        auto output = [&]()
+        {
+            for (int i = int(outputFields.size()) - 1; i >= 0; --i)
+            {
+                int fidx = outputFields[i];
+                if (d.isAllocated(fidx))
+                {
+                    int column = std::find(d.outputFieldIndices.begin(), d.outputFieldIndices.end(), fidx) -
+                                 d.outputFieldIndices.begin();
+                    transferToHost(d, first, last, {d.fieldNames[fidx]});
+                    std::visit([writer, c = column, key = d.fieldNames[fidx]](auto field)
+                               { writer->writeField(key, field->data(), c); },
+                               fieldPointers[fidx]);
+                    outputFields.erase(outputFields.begin() + i);
+                }
+            }
+        };
+
+        output();
     }
 };
 

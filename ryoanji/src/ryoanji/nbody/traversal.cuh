@@ -33,12 +33,27 @@
 #pragma once
 
 #include <algorithm>
+#include "cstone/cuda/gpu_config.cuh"
+#include "cstone/primitives/warpscan.cuh"
 #include "kernel.hpp"
 #include "kernel_wrapper.hpp"
-#include "warpscan.cuh"
 
 namespace ryoanji
 {
+
+using cstone::shflSync;
+using cstone::imin;
+using cstone::ballotSync;
+using cstone::syncWarp;
+using cstone::shflDownSync;
+using cstone::shflUpSync;
+using cstone::inclusiveScanInt;
+using cstone::inclusiveSegscanInt;
+using cstone::streamCompact;
+using cstone::shflXorSync;
+using cstone::warpMax;
+using cstone::warpMin;
+using cstone::GpuConfig;
 
 struct TravConfig
 {
@@ -254,9 +269,9 @@ __device__ util::tuple<unsigned, unsigned>
         }
 
         // Direct
-        bool      directTodo    = isDirect;
         const int firstBody     = layout[leafIdx];
         const int numBodies     = (layout[leafIdx + 1] - firstBody) & -int(isDirect); // Number of bodies in cell
+        bool      directTodo    = numBodies;
         const int numBodiesScan = inclusiveScanInt(numBodies);                        // Inclusive scan of numBodies
         int       numBodiesLane = numBodiesScan - numBodies;                          // Exclusive scan of numBodies
         int       numBodiesWarp = shflSync(numBodiesScan, GpuConfig::warpSize - 1);   // Total numBodies of current warp
@@ -538,7 +553,7 @@ auto computeAcceleration(size_t firstBody, size_t lastBody, const Tc* x, const T
     auto t0 = std::chrono::high_resolution_clock::now();
     traverse<<<numBlocks, TravConfig::numThreads>>>(firstBody, lastBody, {levelRange[1].x, levelRange[1].y}, x, y, z, m,
                                                     h, childOffsets, internalToLeaf, layout, sourceCenter, Multipole, G,
-                                                    p, ax, ay, az, rawPtr(globalPool.data()));
+                                                    p, ax, ay, az, rawPtr(globalPool));
     kernelSuccess("traverse");
 
     auto   t1 = std::chrono::high_resolution_clock::now();

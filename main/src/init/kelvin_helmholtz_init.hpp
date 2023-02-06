@@ -73,7 +73,7 @@ void initKelvinHelmholtzFields(Dataset& d, const std::map<std::string, double>& 
     d.minDt    = firstTimeStep;
     d.minDt_m1 = firstTimeStep;
 
-    auto cv = sph::idealGasCv(d.muiConst);
+    auto cv = sph::idealGasCv(d.muiConst, gamma);
 
 #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < d.x.size(); i++)
@@ -145,6 +145,39 @@ auto makeHalfDenseTemplate(std::vector<T> x, std::vector<T> y, std::vector<T> z,
     return std::make_tuple(xHalf, yHalf, zHalf);
 }
 
+/*!
+ * @brief assembles the global Kelvin-Helmholtz initial conditions
+ *
+ * @params x_HD, y_HD, z_HD:     x, y and z coordinate vector of the high density template
+ * @params x_LD, y_LD, z_HD:     x, y and z coordinate vector of the low density template
+ */
+template<class T, class Dataset>
+void assembleKelvinHelmholtz(std::vector<T>& x_HD, std::vector<T>& y_HD, std::vector<T>& z_HD, std::vector<T>& x_LD,
+                             std::vector<T>& y_LD, std::vector<T>& z_LD, Dataset& d, size_t start, size_t end,
+                             const std::map<std::string, double>& constants)
+{
+
+    for (int i = 0; i < 16; i++)
+    {
+        for (int j = 0; j < 16; j++)
+        {
+            T iFloat = static_cast<T>(i);
+            T jFloat = static_cast<T>(j);
+            if (i < 12 && i > 3)
+            {
+                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::periodic,
+                                    cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
+                assembleCube<T>(start, end, temp, 1, x_HD, y_HD, z_HD, d.x, d.y, d.z);
+            }
+            else
+            {
+                cstone::Box<T> temp(jFloat, jFloat + 1.0, iFloat, iFloat + 1.0, 0, 1, cstone::BoundaryType::periodic,
+                                    cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
+                assembleCube<T>(start, end, temp, 1, x_LD, y_LD, z_LD, d.x, d.y, d.z);
+            }
+        }
+    }
+}
 std::map<std::string, double> KelvinHelmholtzConstants()
 {
     return {{"rhoInt", 2.},     {"rhoExt", 1.},          {"vxExt", 0.5}, {"vxInt", -0.5},
@@ -182,23 +215,14 @@ public:
         auto [keyStart, keyEnd] = partitionRange(cstone::nodeRange<KeyType>(0), rank, numRanks);
 
         auto [xHalf, yHalf, zHalf] = makeHalfDenseTemplate<T, Dataset>(xBlock, yBlock, zBlock, blockSize);
-
-        std::tuple<int, int, int> multiplicity_LD = {16, 4, 1};
-        std::tuple<int, int, int> multiplicity_HD = {16, 8, 1};
-        auto                      pbc             = cstone::BoundaryType::periodic;
-        cstone::Box<T>            lower(0, 1, 0, 0.25, 0, 0.0625, pbc, pbc, pbc);
-        cstone::Box<T>            middle(0, 1, 0.25, 0.75, 0, 0.0625, pbc, pbc, pbc);
-        cstone::Box<T>            upper(0, 1, 0.75, 1, 0, 0.0625, pbc, pbc, pbc);
-        assembleRectangle<T>(keyStart, keyEnd, lower, multiplicity_LD, xHalf, yHalf, zHalf, d.x, d.y, d.z);
-        assembleRectangle<T>(keyStart, keyEnd, middle, multiplicity_HD, xBlock, yBlock, zBlock, d.x, d.y, d.z);
-        assembleRectangle<T>(keyStart, keyEnd, upper, multiplicity_LD, xHalf, yHalf, zHalf, d.x, d.y, d.z);
+        assembleKelvinHelmholtz(xBlock, yBlock, zBlock, xHalf, yHalf, zHalf, d, keyStart, keyEnd, constants_);
 
         size_t npartInner   = 128 * xBlock.size();
         T      volumeHD     = 0.5 * 0.0625;
         T      particleMass = volumeHD * rhoInt / npartInner;
 
         size_t totalNPart = 128 * (xBlock.size() + xHalf.size());
-        d.resize(d.x.size());
+        d.resize(totalNPart);
         initKelvinHelmholtzFields(d, constants_, particleMass);
 
         d.numParticlesGlobal = d.x.size();
