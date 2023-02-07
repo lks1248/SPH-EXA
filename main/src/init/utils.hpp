@@ -66,12 +66,10 @@ auto makeLessDenseTemplate(size_t n, std::vector<T>& x, std::vector<T>& y, std::
 {
     using KeyType = typename Dataset::KeyType;
 
-    double shrinkFactor = 1. / n;
-
     std::vector<T> xSmall, ySmall, zSmall;
-    xSmall.reserve(std::ceil(blockSize * shrinkFactor));
-    ySmall.reserve(std::ceil(blockSize * shrinkFactor));
-    zSmall.reserve(std::ceil(blockSize * shrinkFactor));
+    xSmall.reserve(blockSize);
+    ySmall.reserve(blockSize);
+    zSmall.reserve(blockSize);
 
     sortBySFCKey<T, KeyType>(x, y, z, blockSize);
 
