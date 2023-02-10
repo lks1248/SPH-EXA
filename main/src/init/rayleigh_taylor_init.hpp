@@ -40,6 +40,7 @@
 #include "io/mpi_file_utils.hpp"
 #include "isim_init.hpp"
 
+#include "utils.hpp"
 #include "grid.hpp"
 
 namespace sphexa
@@ -76,11 +77,8 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
 #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < d.x.size(); i++)
     {
-        d.x[i] /= 16.;
-        d.y[i] /= 16.;
-        d.z[i] /= 16.;
 
-        d.vy[i] = omega0 * (1. -std::cos(4 * M_PI * d.x[i])) * (1. -std::cos(4 * M_PI * d.y[i] / 3.));
+        d.vy[i] = omega0 * (1. - std::cos(4 * M_PI * d.x[i])) * (1. - std::cos(4 * M_PI * d.y[i] / 3.));
 
         if (d.y[i] < y0)
         {
@@ -105,98 +103,11 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     }
 }
 
-template<class T, class Dataset>
-auto makeHalfDenseTemplateRT(std::vector<T> x, std::vector<T> y, std::vector<T> z, size_t blockSize)
-{
-    using KeyType = typename Dataset::KeyType;
-
-    std::vector<T> xHalf, yHalf, zHalf;
-    xHalf.reserve(blockSize);
-    yHalf.reserve(blockSize);
-    zHalf.reserve(blockSize);
-    cstone::Box<T> templateBox(0, 1, 0, 1, 0, 1);
-
-    std::vector<KeyType> codes(blockSize);
-    computeSfcKeys(x.data(), y.data(), z.data(), cstone::sfcKindPointer(codes.data()), blockSize, templateBox);
-
-    std::vector<cstone::LocalIndex> sfcOrder(blockSize);
-    std::iota(begin(sfcOrder), end(sfcOrder), cstone::LocalIndex(0));
-    cstone::sort_by_key(begin(codes), end(codes), begin(sfcOrder));
-
-    std::vector<T> buffer(blockSize);
-    cstone::gather<cstone::LocalIndex>(sfcOrder, x.data(), buffer.data());
-    std::swap(x, buffer);
-    cstone::gather<cstone::LocalIndex>(sfcOrder, y.data(), buffer.data());
-    std::swap(y, buffer);
-    cstone::gather<cstone::LocalIndex>(sfcOrder, z.data(), buffer.data());
-    std::swap(z, buffer);
-
-    for (size_t i = 0; i < blockSize; i += 2)
-    {
-        xHalf.push_back(x[i]);
-        yHalf.push_back(y[i]);
-        zHalf.push_back(z[i]);
-    }
-
-    xHalf.shrink_to_fit();
-    yHalf.shrink_to_fit();
-    zHalf.shrink_to_fit();
-
-    return std::make_tuple(xHalf, yHalf, zHalf);
-}
-
-/*!
- * @brief assembles the global Rayleigh-Taylor initial conditions
- *
- * @params x_HD, y_HD, z_HD:     x, y and z coordinate vector of the high density template
- * @params x_LD, y_LD, z_HD:     x, y and z coordinate vector of the low density template
- */
-template<class T, class Dataset>
-void assembleRayleighTaylor(std::vector<T>& x_HD, std::vector<T>& y_HD, std::vector<T>& z_HD, std::vector<T>& x_LD,
-                            std::vector<T>& y_LD, std::vector<T>& z_LD, Dataset& d, size_t start, size_t end,
-                            size_t xBlocks, size_t yBlocks, size_t zBlocks)
-{
-    for (size_t x = 0; x < xBlocks; x++)
-    {
-        for (size_t y = 0; y < yBlocks; y++)
-        {
-            for (size_t z = 0; z < zBlocks; z++)
-            {
-                T xFloat = static_cast<T>(x);
-                T yFloat = static_cast<T>(y);
-                T zFloat = static_cast<T>(z);
-
-                cstone::Box<T> temp(xFloat, xFloat + 1.0, yFloat, yFloat + 1.0, zFloat, zFloat + 1.0,
-                                    cstone::BoundaryType::open, cstone::BoundaryType::open, cstone::BoundaryType::open);
-
-                if (y < yBlocks / 2)
-                {
-                    assembleCube<T>(start, end, temp, 1, x_LD, y_LD, z_LD, d.x, d.y, d.z);
-                }
-                else
-                {
-                    assembleCube<T>(start, end, temp, 1, x_HD, y_HD, z_HD, d.x, d.y, d.z);
-                }
-            }
-        }
-    }
-}
-
 std::map<std::string, double> RayleighTaylorConstants()
 {
-    return {{"rhoUp", 2.},
-            {"rhoDown", 1.},
-            {"gamma", 1.4},
-            {"firstTimeStep", 1e-9},
-            {"p0", 2.5},
-            {"y0", 0.75},
-            {"omega0", 0.0025},
-            {"ay0", -0.5},
-            {"blockSize", 0.0625},
-            {"xSize", 0.5},
-            {"ySize", 1.5},
-            {"zSize", 0.0625}
-    };
+    return {{"rhoUp", 2.},         {"rhoDown", 1.}, {"gamma", 1.4},     {"firstTimeStep", 1e-4},
+            {"p0", 2.5},           {"y0", 0.75},    {"omega0", 0.0025}, {"ay0", -0.5},
+            {"blockSize", 0.0625}, {"xSize", 0.5},  {"ySize", 1.5},     {"zSize", 0.0625}};
 }
 
 template<class Dataset>
@@ -206,22 +117,27 @@ class RayleighTaylorGlass : public ISimInitializer<Dataset>
     std::map<std::string, double> constants_;
 
 public:
-    RayleighTaylorGlass(std::string initBlock, std::string propChoice)
+    RayleighTaylorGlass(std::string initBlock)
         : glassBlock(initBlock)
     {
-        if (propChoice != "ve-accel")
-        {
-            std::cout << "\n ERROR: In RayleighTaylor test (--init RT) the SPH propagator have to be 've-accel', but now it is '" << propChoice << "'. Please, add the option '--prop ve-accel' in your execution.\n" << std::endl;
-            exit(-1);
-        }
         constants_ = RayleighTaylorConstants();
     }
 
-    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cbrtNumPart, Dataset& simData) const override
+    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cbrtNumPart,
+                                                 Dataset& simData) const override
     {
+
         using KeyType = typename Dataset::KeyType;
         using T       = typename Dataset::RealType;
         auto& d       = simData.hydro;
+
+        if (d.propagator != "custom")
+        {
+            throw std::runtime_error(
+                "ERROR: For the Rayleigh Taylor test (--init RT) the SPH propagator has to be 'custom' with a "
+                "call to artificial gravity! Please add the option '--prop custom' in your execution and "
+                "double check the implementation.\n");
+        }
 
         T rhoUp = constants_.at("rhoUp");
 
@@ -237,28 +153,39 @@ public:
         size_t nBlocks    = xBlocks * yBlocks * zBlocks;
         size_t halfBlocks = nBlocks / 2;
 
-        d.ay0 = constants_.at("ay0");
-
         std::vector<T> xBlock, yBlock, zBlock;
         fileutils::readTemplateBlock(glassBlock, xBlock, yBlock, zBlock);
 
-        cstone::Box<T> globalBox(0,  xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic, cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
+        cstone::Box<T> globalBox(0, xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic,
+                                 cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
 
         unsigned level             = cstone::log8ceil<KeyType>(100 * numRanks);
         auto     initialBoundaries = cstone::initialDomainSplits<KeyType>(numRanks, level);
         KeyType  keyStart          = initialBoundaries[rank];
         KeyType  keyEnd            = initialBoundaries[rank + 1];
 
-        auto [xHalf, yHalf, zHalf] = makeHalfDenseTemplateRT<T, Dataset>(xBlock, yBlock, zBlock, xBlock.size());
-        assembleRayleighTaylor(xBlock, yBlock, zBlock, xHalf, yHalf, zHalf, d, keyStart, keyEnd, xBlocks, yBlocks, zBlocks);
+        auto [xHalf, yHalf, zHalf] = makeLessDenseTemplate<T, Dataset>(2, xBlock, yBlock, zBlock, xBlock.size());
 
-        size_t npartUp      = halfBlocks * xBlock.size();
-        T      volumeHD     = xSize * constants_.at("y0") * zSize; // (x_size * y_size * z_size) in the high-density zone
+        size_t                    multi1D      = std::rint(cbrtNumPart / std::cbrt(xBlock.size()));
+        std::tuple<int, int, int> multiplicity = {xBlocks * multi1D, yBlocks / 2 * multi1D, multi1D};
+
+        cstone::Box<T> layer1(0, xSize, 0, ySize / 2., 0, zSize, cstone::BoundaryType::periodic,
+                              cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
+        cstone::Box<T> layer2(0, xSize, ySize / 2., ySize, 0, zSize, cstone::BoundaryType::periodic,
+                              cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
+
+        assembleRectangle<T>(keyStart, keyEnd, layer1, multiplicity, xHalf, yHalf, zHalf, d.x, d.y, d.z);
+        assembleRectangle<T>(keyStart, keyEnd, layer2, multiplicity, xBlock, yBlock, zBlock, d.x, d.y, d.z);
+
+        size_t npartUp  = halfBlocks * xBlock.size();
+        T      volumeHD = xSize * constants_.at("y0") * zSize; // (x_size * y_size * z_size) in the high-density zone
         T      particleMass = volumeHD * rhoUp / npartUp;
 
-        size_t totalNPart = halfBlocks * (xBlock.size() + xHalf.size());
-        d.resize(totalNPart);
+        d.resize(d.x.size());
+
         initRayleighTaylorFields(d, constants_, particleMass);
+        applyFixedBoundaries(d.y.data(), d.vx.data(), d.vy.data(), d.vz.data(), d.h.data(), globalBox.ymax(),
+                             globalBox.ymin(), d.x.size());
 
         d.numParticlesGlobal = d.x.size();
         MPI_Allreduce(MPI_IN_PLACE, &d.numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, simData.comm);

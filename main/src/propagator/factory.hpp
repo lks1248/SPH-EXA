@@ -86,7 +86,11 @@ propagatorFactory(const std::string& choice, bool avClean, size_t ngmax, size_t 
     }
     else if (choice == "custom")
     {
-        return std::make_unique<CustomProp<DomainType, ParticleDataType>>(ngmax, ng0, output, rank);
+        if (avClean)
+        {
+            return std::make_unique<CustomProp<true, DomainType, ParticleDataType>>(ngmax, ng0, output, rank);
+        }
+        else { return std::make_unique<CustomProp<false, DomainType, ParticleDataType>>(ngmax, ng0, output, rank); }
     }
     else { throw std::runtime_error("Unknown propagator choice: " + choice); }
 }

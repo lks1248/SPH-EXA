@@ -119,7 +119,7 @@ std::unique_ptr<ISimInitializer<Dataset>> initializerFactory(std::string testCas
     if (testCase == "RT")
     {
         if (glassBlock.empty()) { throw std::runtime_error("need a valid glass block for Rayleigh-Taylor test\n"); }
-        else { return std::make_unique<RayleighTaylorGlass<Dataset>>(glassBlock, propChoice); }
+        else { return std::make_unique<RayleighTaylorGlass<Dataset>>(glassBlock); }
     }
     if (std::filesystem::exists(testCase)) { return std::make_unique<FileInit<Dataset>>(testCase); }
 

@@ -24,8 +24,7 @@
  */
 
 /*! @file
- * @brief output and calculate energies and growth rate for Kelvin-Helmholtz tests
- *        This calculation for the growth rate was taken from McNally et al. ApJSS, 201 (2012)
+ * @brief output and calculate energies and growth rate for Rayleigh-Taylor tests
  *
  * @author Jose A. Escartin <ja.escartin@gmail.com>
  * @author Ruben Cabezon <ruben.cabezon@unibas.ch>
@@ -41,9 +40,10 @@
 
 #include "conserved_quantities.hpp"
 #include "iobservables.hpp"
-#include "io/ifile_writer.hpp"
+#include "io/file_utils.hpp"
 #include "sph/math.hpp"
 #include "cstone/tree/definitions.h"
+#include "sph/particles_data.hpp"
 
 namespace sphexa
 {
@@ -137,8 +137,11 @@ localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, size_t ngmax, si
 template<typename T, class Dataset> util::tuple<T, T>
 computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, MPI_Comm comm, const cstone::Box<T>& box, size_t ngmax)
 {
+    //TODO no current GPU implementation! can't transfer neighbour data
+    //transferToHost(d, startIndex, endIndex, {"y", "vy", "rho", "neighbours", "nc"});
+
     auto [localUp, localDown] = localVelocitiesRTGrowthRate(startIndex, endIndex, ngmax, d.x.size(), d.Atmin, d.Atmax, d.ramp,
-            d.y.data(), d.vy.data(), d.prho.data(), d.neighbors.data(), d.nc.data());
+            d.y.data(), d.vy.data(), d.rho.data(), d.neighbors.data(), d.nc.data());
 
     int rootRank = 0;
     int mpiranks;
@@ -192,11 +195,10 @@ template<class Dataset>
 class TimeVelocitiesGrowthRT : public IObservables<Dataset>
 {
     std::ofstream& constantsFile;
-    size_t         ngmax;
 
 public:
-    TimeVelocitiesGrowthRT(std::ofstream& constPath, size_t ngmax)
-        : constantsFile(constPath), ngmax(ngmax)
+    TimeVelocitiesGrowthRT(std::ofstream& constPath)
+        : constantsFile(constPath)
     {
     }
 
@@ -206,7 +208,7 @@ public:
     {
         auto& d = simData.hydro;
 
-        auto [vy_max, vy_min] = computeVelocitiesRTGrowthRate<T>(firstIndex, lastIndex, d, simData.comm, box, ngmax);
+        auto [vy_max, vy_min] = computeVelocitiesRTGrowthRate<T>(firstIndex, lastIndex, d, simData.comm, box, d.ngmax);
 
         int rank;
         MPI_Comm_rank(simData.comm, &rank);

@@ -50,7 +50,7 @@ namespace sphexa
 //! @brief reads a specified attribute if exists and has the specified type
 template<class AttrType>
 void findH5Attribute(const std::string& fname, const std::string& attributeToRead, AttrType* attribute,
-                           h5part_int64_t h5Type)
+                     h5part_int64_t h5Type)
 {
 
     if (std::filesystem::exists(fname))
@@ -113,20 +113,6 @@ std::unique_ptr<IObservables<Dataset>> observablesFactory(const std::string& tes
     {
         return std::make_unique<GravWaves<Dataset>>(constantsFile, gravWaveAttribute[1], gravWaveAttribute[2]);
     }
-
-    //TODO
-    std::string rtGrowthRate = "RayleighTaylorGrowthRate";
-    if (haveH5Attribute(testCase, rtGrowthRate, H5PART_INT64))
-    {
-        h5part_int64_t attrValue;
-        H5PartFile*    h5_file = nullptr;
-        h5_file                = H5PartOpenFile(testCase.c_str(), H5PART_READ);
-        H5PartReadFileAttrib(h5_file, rtGrowthRate.c_str(), &attrValue);
-        H5PartCloseFile(h5_file);
-
-        if (attrValue) { return std::make_unique<TimeVelocitiesGrowthRT<Dataset>>(constantsFile, ngmax); }
-    }
-
 
     if (testCase == "wind-shock")
     {
