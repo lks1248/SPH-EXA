@@ -118,7 +118,6 @@ void computeConservedQuantities(size_t startIndex, size_t endIndex, Dataset& d, 
         }
 
         std::tie(eKin, eInt, linmom, angmom) = localConservedQuantities(startIndex, endIndex, d);
-        machSqSum                            = localMachSquareSum(startIndex, endIndex, d);
     }
 
     util::array<double, 10> quantities, globalQuantities;
