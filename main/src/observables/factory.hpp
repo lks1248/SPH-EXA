@@ -36,6 +36,7 @@
 #include "cstone/sfc/box.hpp"
 #include "iobservables.hpp"
 #include "time_energy_growth.hpp"
+#include "time_velocities_growth_RT.hpp"
 #include "time_energies.hpp"
 #include "gravitational_waves.hpp"
 #include "wind_bubble_fraction.hpp"
@@ -113,7 +114,19 @@ std::unique_ptr<IObservables<Dataset>> observablesFactory(const std::string& tes
         return std::make_unique<GravWaves<Dataset>>(constantsFile, gravWaveAttribute[1], gravWaveAttribute[2]);
     }
 
-#endif
+    //TODO
+    std::string rtGrowthRate = "RayleighTaylorGrowthRate";
+    if (haveH5Attribute(testCase, rtGrowthRate, H5PART_INT64))
+    {
+        h5part_int64_t attrValue;
+        H5PartFile*    h5_file = nullptr;
+        h5_file                = H5PartOpenFile(testCase.c_str(), H5PART_READ);
+        H5PartReadFileAttrib(h5_file, rtGrowthRate.c_str(), &attrValue);
+        H5PartCloseFile(h5_file);
+
+        if (attrValue) { return std::make_unique<TimeVelocitiesGrowthRT<Dataset>>(constantsFile, ngmax); }
+    }
+
 
     if (testCase == "wind-shock")
     {
@@ -123,6 +136,11 @@ std::unique_ptr<IObservables<Dataset>> observablesFactory(const std::string& tes
         double bubbleMass   = bubbleVolume * rhoInt;
         return std::make_unique<WindBubble<Dataset>>(constantsFile, rhoInt, uExt, bubbleMass);
     }
+#endif
+
+    if (testCase == "nbody") { return std::make_unique<IObservables<Dataset>>(); }
+
+    if (testCase == "RT") { return std::make_unique<TimeVelocitiesGrowthRT<Dataset>>(constantsFile); }
 
     if (testCase == "turbulence") { return std::make_unique<TurbulenceMachRMS<Dataset>>(constantsFile); }
 

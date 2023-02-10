@@ -46,6 +46,8 @@
 #include "wind_shock_init.hpp"
 #include "turbulence_init.hpp"
 #include "kelvin_helmholtz_init.hpp"
+#include "rayleigh_taylor_init.hpp"
+
 #endif
 #ifdef SPH_EXA_HAVE_GRACKLE
 #include "evrard_cooling_init.hpp"
@@ -114,6 +116,11 @@ std::unique_ptr<ISimInitializer<Dataset>> initializerFactory(std::string testCas
         return std::make_unique<EvrardGlassSphereCooling<Dataset>>(glassBlock);
     }
 #endif
+    if (testCase == "RT")
+    {
+        if (glassBlock.empty()) { throw std::runtime_error("need a valid glass block for Rayleigh-Taylor test\n"); }
+        else { return std::make_unique<RayleighTaylorGlass<Dataset>>(glassBlock, propChoice); }
+    }
     if (std::filesystem::exists(testCase)) { return std::make_unique<FileInit<Dataset>>(testCase); }
 
 #endif
