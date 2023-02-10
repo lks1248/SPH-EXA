@@ -1,8 +1,8 @@
 /*
  * MIT License
  *
- * Copyright (c) 2021 CSCS, ETH Zurich
- *               2021 University of Basel
+ * Copyright (c) 2022 CSCS, ETH Zurich
+ *               2022 University of Basel
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -32,48 +32,45 @@
 
 #pragma once
 
-#include "sph/math.hpp"
-#include "sph/kernels.hpp"
+#include "sph/sph_gpu.hpp"
 #include "momentum_energy_kern.hpp"
-#include "sph/sph.cuh"
-#include "sph/traits.hpp"
 
 namespace sph
 {
 
 template<class T, class Dataset>
-void computeMomentumEnergySTDImpl(size_t startIndex, size_t endIndex, size_t ngmax, Dataset& d,
+void computeMomentumEnergyStdImpl(size_t startIndex, size_t endIndex, unsigned ngmax, Dataset& d,
                                   const cstone::Box<T>& box)
 {
-    const int* neighbors      = d.neighbors.data();
-    const int* neighborsCount = d.neighborsCount.data();
+    const cstone::LocalIndex* neighbors      = d.neighbors.data();
+    const unsigned*           neighborsCount = d.nc.data();
 
-    const T* h   = d.h.data();
-    const T* m   = d.m.data();
-    const T* x   = d.x.data();
-    const T* y   = d.y.data();
-    const T* z   = d.z.data();
-    const T* vx  = d.vx.data();
-    const T* vy  = d.vy.data();
-    const T* vz  = d.vz.data();
-    const T* rho = d.rho.data();
-    const T* c   = d.c.data();
-    const T* p   = d.p.data();
+    const auto* h   = d.h.data();
+    const auto* m   = d.m.data();
+    const auto* x   = d.x.data();
+    const auto* y   = d.y.data();
+    const auto* z   = d.z.data();
+    const auto* vx  = d.vx.data();
+    const auto* vy  = d.vy.data();
+    const auto* vz  = d.vz.data();
+    const auto* rho = d.rho.data();
+    const auto* c   = d.c.data();
+    const auto* p   = d.p.data();
 
-    const T* c11 = d.c11.data();
-    const T* c12 = d.c12.data();
-    const T* c13 = d.c13.data();
-    const T* c22 = d.c22.data();
-    const T* c23 = d.c23.data();
-    const T* c33 = d.c33.data();
+    const auto* c11 = d.c11.data();
+    const auto* c12 = d.c12.data();
+    const auto* c13 = d.c13.data();
+    const auto* c22 = d.c22.data();
+    const auto* c23 = d.c23.data();
+    const auto* c33 = d.c33.data();
 
-    T* du       = d.du.data();
-    T* grad_P_x = d.ax.data();
-    T* grad_P_y = d.ay.data();
-    T* grad_P_z = d.az.data();
+    auto* du       = d.du.data();
+    auto* grad_P_x = d.ax.data();
+    auto* grad_P_y = d.ay.data();
+    auto* grad_P_z = d.az.data();
 
-    const T* wh  = d.wh.data();
-    const T* whd = d.whd.data();
+    const auto* wh  = d.wh.data();
+    const auto* whd = d.whd.data();
 
     const T K         = d.K;
     const T sincIndex = d.sincIndex;
@@ -87,36 +84,9 @@ void computeMomentumEnergySTDImpl(size_t startIndex, size_t endIndex, size_t ngm
 
         T maxvsignal = 0;
 
-        momentumAndEnergyJLoop(i,
-                               sincIndex,
-                               K,
-                               box,
-                               neighbors + ngmax * ni,
-                               neighborsCount[i],
-                               x,
-                               y,
-                               z,
-                               vx,
-                               vy,
-                               vz,
-                               h,
-                               m,
-                               rho,
-                               p,
-                               c,
-                               c11,
-                               c12,
-                               c13,
-                               c22,
-                               c23,
-                               c33,
-                               wh,
-                               whd,
-                               grad_P_x,
-                               grad_P_y,
-                               grad_P_z,
-                               du,
-                               &maxvsignal);
+        unsigned nc = std::min(neighborsCount[i], ngmax);
+        momentumAndEnergyJLoop(i, sincIndex, K, box, neighbors + ngmax * ni, nc, x, y, z, vx, vy, vz, h, m, rho, p, c,
+                               c11, c12, c13, c22, c23, c33, wh, whd, grad_P_x, grad_P_y, grad_P_z, du, &maxvsignal);
 
         T dt_i = tsKCourant(maxvsignal, h[i], c[i], d.Kcour);
         minDt  = std::min(minDt, dt_i);
@@ -126,13 +96,13 @@ void computeMomentumEnergySTDImpl(size_t startIndex, size_t endIndex, size_t ngm
 }
 
 template<class T, class Dataset>
-void computeMomentumEnergySTD(size_t startIndex, size_t endIndex, size_t ngmax, Dataset& d, const cstone::Box<T>& box)
+void computeMomentumEnergySTD(size_t startIndex, size_t endIndex, unsigned ngmax, Dataset& d, const cstone::Box<T>& box)
 {
-    if constexpr (sphexa::HaveGpu<typename Dataset::AcceleratorType>{})
+    if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
     {
-        cuda::computeMomentumEnergySTD(startIndex, endIndex, ngmax, d, box);
+        computeMomentumEnergyStdGpu(startIndex, endIndex, ngmax, d, box);
     }
-    else { computeMomentumEnergySTDImpl(startIndex, endIndex, ngmax, d, box); }
+    else { computeMomentumEnergyStdImpl(startIndex, endIndex, ngmax, d, box); }
 }
 
 } // namespace sph

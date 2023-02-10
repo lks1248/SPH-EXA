@@ -34,10 +34,15 @@
 #include <map>
 
 #include "cstone/sfc/box.hpp"
+#include "sph/eos.hpp"
 
 #include "io/file_utils.hpp"
+#ifdef SPH_EXA_HAVE_H5PART
+#include "io/mpi_file_utils.hpp"
+#endif
 #include "isim_init.hpp"
 #include "sedov_constants.hpp"
+#include "early_sync.hpp"
 #include "grid.hpp"
 
 namespace sphexa
@@ -59,18 +64,30 @@ void initSedovFields(Dataset& d, const std::map<std::string, double>& constants)
 
     double firstTimeStep = constants.at("firstTimeStep");
 
+    d.gamma    = constants.at("gamma");
+    d.muiConst = constants.at("mui");
+    d.minDt    = firstTimeStep;
+    d.minDt_m1 = firstTimeStep;
+
     std::fill(d.m.begin(), d.m.end(), mPart);
     std::fill(d.h.begin(), d.h.end(), hInit);
     std::fill(d.du_m1.begin(), d.du_m1.end(), 0.0);
-    std::fill(d.mui.begin(), d.mui.end(), 10.0);
+    std::fill(d.mui.begin(), d.mui.end(), d.muiConst);
     std::fill(d.alpha.begin(), d.alpha.end(), d.alphamin);
-
-    d.minDt    = firstTimeStep;
-    d.minDt_m1 = firstTimeStep;
 
     std::fill(d.vx.begin(), d.vx.end(), 0.0);
     std::fill(d.vy.begin(), d.vy.end(), 0.0);
     std::fill(d.vz.begin(), d.vz.end(), 0.0);
+
+    // general form: d.x_m1[i] = d.vx[i] * firstTimeStep;
+    std::fill(d.x_m1.begin(), d.x_m1.end(), 0.0);
+    std::fill(d.y_m1.begin(), d.y_m1.end(), 0.0);
+    std::fill(d.z_m1.begin(), d.z_m1.end(), 0.0);
+
+    auto cv = sph::idealGasCv(d.muiConst, d.gamma);
+
+    // If temperature is not allocated, we can still use this initializer for just the coordinates
+    if (d.temp.empty()) { return; }
 
 #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < d.x.size(); i++)
@@ -80,11 +97,8 @@ void initSedovFields(Dataset& d, const std::map<std::string, double>& constants)
         T zi = d.z[i];
         T r2 = xi * xi + yi * yi + zi * zi;
 
-        d.u[i] = constants.at("ener0") * exp(-(r2 / width2)) + constants.at("u0");
-
-        d.x_m1[i] = xi - d.vx[i] * firstTimeStep;
-        d.y_m1[i] = yi - d.vy[i] * firstTimeStep;
-        d.z_m1[i] = zi - d.vz[i] * firstTimeStep;
+        T ui      = constants.at("ener0") * exp(-(r2 / width2)) + constants.at("u0");
+        d.temp[i] = ui / cv;
     }
 }
 
@@ -96,19 +110,25 @@ class SedovGrid : public ISimInitializer<Dataset>
 public:
     SedovGrid() { constants_ = sedovConstants(); }
 
-    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cubeSide, Dataset& d) const override
+    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cubeSide,
+                                                 Dataset& simData) const override
     {
+        auto& d              = simData.hydro;
+        using KeyType        = typename Dataset::KeyType;
         using T              = typename Dataset::RealType;
         d.numParticlesGlobal = cubeSide * cubeSide * cubeSide;
 
         auto [first, last] = partitionRange(d.numParticlesGlobal, rank, numRanks);
         d.resize(last - first);
 
-        T r = constants_.at("r1");
+        T              r = constants_.at("r1");
+        cstone::Box<T> globalBox(-r, r, cstone::BoundaryType::periodic);
         regularGrid(r, cubeSide, first, last, d.x, d.y, d.z);
+        syncCoords<KeyType>(rank, numRanks, d.numParticlesGlobal, d.x, d.y, d.z, globalBox);
+        d.resize(d.x.size());
         initSedovFields(d, constants_);
 
-        return cstone::Box<T>(-r, r, cstone::BoundaryType::periodic);
+        return globalBox;
     }
 
     const std::map<std::string, double>& constants() const override { return constants_; }
@@ -135,8 +155,10 @@ public:
      * @param[inout] d                particle dataset
      * @return                        the global coordinate bounding box
      */
-    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cbrtNumPart, Dataset& d) const override
+    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cbrtNumPart,
+                                                 Dataset& simData) const override
     {
+        auto& d       = simData.hydro;
         using KeyType = typename Dataset::KeyType;
         using T       = typename Dataset::RealType;
 
@@ -144,14 +166,19 @@ public:
         fileutils::readTemplateBlock(glassBlock, xBlock, yBlock, zBlock);
         size_t blockSize = xBlock.size();
 
-        size_t multiplicity  = std::rint(cbrtNumPart / std::cbrt(blockSize));
-        d.numParticlesGlobal = multiplicity * multiplicity * multiplicity * blockSize;
+        size_t                    multi1D      = std::rint(cbrtNumPart / std::cbrt(blockSize));
+        std::tuple<int, int, int> multiplicity = {multi1D, multi1D, multi1D};
+        d.numParticlesGlobal                   = multi1D * multi1D * multi1D * blockSize;
 
         T              r = constants_.at("r1");
         cstone::Box<T> globalBox(-r, r, cstone::BoundaryType::periodic);
 
-        auto [keyStart, keyEnd] = partitionRange(cstone::nodeRange<KeyType>(0), rank, numRanks);
-        assembleCube<T>(keyStart, keyEnd, globalBox, multiplicity, xBlock, yBlock, zBlock, d.x, d.y, d.z);
+        unsigned level             = cstone::log8ceil<KeyType>(100 * numRanks);
+        auto     initialBoundaries = cstone::initialDomainSplits<KeyType>(numRanks, level);
+        KeyType  keyStart          = initialBoundaries[rank];
+        KeyType  keyEnd            = initialBoundaries[rank + 1];
+
+        assembleRectangle<T>(keyStart, keyEnd, globalBox, multiplicity, xBlock, yBlock, zBlock, d.x, d.y, d.z);
 
         d.resize(d.x.size());
         initSedovFields(d, constants_);

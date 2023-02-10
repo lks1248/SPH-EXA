@@ -34,10 +34,8 @@
 
 #include <variant>
 
-#include "cstone/domain/domain.hpp"
-#include "sph/sph.hpp"
-#include "sph/traits.hpp"
 #include "util/timer.hpp"
+#include "io/ifile_io.hpp"
 
 namespace sphexa
 {
@@ -45,6 +43,8 @@ namespace sphexa
 template<class DomainType, class ParticleDataType>
 class Propagator
 {
+    using T = typename ParticleDataType::RealType;
+
 public:
     Propagator(size_t ngmax, size_t ng0, std::ostream& output, size_t rank)
         : timer(output, rank)
@@ -55,35 +55,40 @@ public:
     {
     }
 
+    //! @brief get a list of field strings marked as conserved at runtime
+    virtual std::vector<std::string> conservedFields() const = 0;
+
+    //! @brief Marks conserved and dependent fields inside the particle dataset as active, enabling memory allocation
     virtual void activateFields(ParticleDataType& d) = 0;
 
+    //! @brief synchronize computational domain
     virtual void sync(DomainType& domain, ParticleDataType& d) = 0;
 
+    //! @brief advance one time-step
     virtual void step(DomainType& domain, ParticleDataType& d) = 0;
 
-    virtual void prepareOutput(ParticleDataType& d, size_t startIndex, size_t endIndex){};
-    virtual void finishOutput(ParticleDataType& d){};
+    //! @brief save particle data fields to file
+    virtual void saveFields(IFileWriter*, size_t, size_t, ParticleDataType&, const cstone::Box<T>&){};
+
+    //! @brief save internal state to file
+    virtual void save(IFileWriter*){};
+
+    //! @brief load internal state from file
+    virtual void load(const std::string& path, MPI_Comm comm){};
 
     virtual ~Propagator() = default;
 
-    void printIterationTimings(const DomainType& domain, const ParticleDataType& d)
+    void printIterationTimings(const DomainType& domain, const ParticleDataType& simData)
     {
+        const auto& d = simData.hydro;
         if (rank_ == 0)
         {
-            printCheck(d.ttot,
-                       d.minDt,
-                       d.etot,
-                       d.eint,
-                       d.ecin,
-                       d.egrav,
-                       domain.box(),
-                       d.numParticlesGlobal,
-                       domain.nParticles(),
-                       domain.globalTree().numLeafNodes(),
-                       domain.nParticlesWithHalos() - domain.nParticles(),
-                       d.totalNeighbors);
+            printCheck(d.ttot, d.minDt, d.etot, d.eint, d.ecin, d.egrav, domain.box(), d.numParticlesGlobal,
+                       domain.nParticles(), domain.globalTree().numLeafNodes(),
+                       domain.nParticlesWithHalos() - domain.nParticles(), d.totalNeighbors);
 
-            std::cout << "### Check ### Focus Tree Nodes: " << domain.focusTree().octree().numLeafNodes() << std::endl;
+            std::cout << "### Check ### Focus Tree Nodes: " << domain.focusTree().octreeViewAcc().numLeafNodes
+                      << std::endl;
             printTotalIterationTime(d.iteration, timer.duration());
         }
     }

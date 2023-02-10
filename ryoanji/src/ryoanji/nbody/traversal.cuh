@@ -33,17 +33,33 @@
 #pragma once
 
 #include <algorithm>
+#include "cstone/cuda/gpu_config.cuh"
+#include "cstone/primitives/warpscan.cuh"
 #include "kernel.hpp"
 #include "kernel_wrapper.hpp"
-#include "warpscan.cuh"
 
 namespace ryoanji
 {
 
+using cstone::ballotSync;
+using cstone::GpuConfig;
+using cstone::imin;
+using cstone::inclusiveScanInt;
+using cstone::inclusiveSegscanInt;
+using cstone::shflDownSync;
+using cstone::shflSync;
+using cstone::shflUpSync;
+using cstone::shflXorSync;
+using cstone::spreadSeg8;
+using cstone::streamCompact;
+using cstone::syncWarp;
+using cstone::warpMax;
+using cstone::warpMin;
+
 struct TravConfig
 {
     //! @brief size of global workspace memory per warp
-    static constexpr int memPerWarp = 2048 * GpuConfig::warpSize;
+    static constexpr int memPerWarp = 512 * GpuConfig::warpSize;
     //! @brief number of threads per block for the traversal kernel
     static constexpr int numThreads = 256;
 
@@ -136,20 +152,20 @@ __device__ void approxAcc(Vec4<Ta> acc_i[TravConfig::nwt], const Vec4<Tc> pos_i[
  *
  * Number of computed P2P interactions per call is GpuConfig::warpSize^2 * TravConfig::nwt
  */
-template<class Tc, class Tm, class Ta>
-__device__ void directAcc(Vec4<Tc> sourceBody, Tm hSource, Vec4<Ta> acc_i[TravConfig::nwt],
+template<class Tc, class Th, class Ta>
+__device__ void directAcc(Vec4<Tc> sourceBody, Th hSource, Vec4<Ta> acc_i[TravConfig::nwt],
                           const Vec4<Tc> pos_i[TravConfig::nwt])
 {
     for (int j = 0; j < GpuConfig::warpSize; j++)
     {
         Vec3<Tc> pos_j{shflSync(sourceBody[0], j), shflSync(sourceBody[1], j), shflSync(sourceBody[2], j)};
-        Tm       m_j = shflSync(sourceBody[3], j);
-        Tm       h_j = shflSync(hSource, j);
+        Tc       m_j = shflSync(sourceBody[3], j);
+        Th       h_j = shflSync(hSource, j);
 
 #pragma unroll
         for (int k = 0; k < TravConfig::nwt; k++)
         {
-            acc_i[k] = P2P(acc_i[k], makeVec3(pos_i[k]), pos_j, m_j, h_j, Tm(pos_i[k][3]));
+            acc_i[k] = P2P(acc_i[k], makeVec3(pos_i[k]), pos_j, m_j, h_j, Th(pos_i[k][3]));
         }
     }
 }
@@ -167,7 +183,7 @@ __device__ void directAcc(Vec4<Tc> sourceBody, Tm hSource, Vec4<Ta> acc_i[TravCo
  * @param[in]    layout         for each leaf cell in [0:numLeaves], stores the index of the first body in the cell
  * @param[in]    sourceCenter   x,y,z center and square MAC radius of each cell in [0:numTreeNodes]
  * @param[in]    Multipoles     the multipole expansions in the same order as srcCells
- * @param[in]    rootRange      source cell indices indices of the top 8 octants
+ * @param[in]    initNodeIdx    source cell indices indices of the top 8 octants
  * @param[-]     tempQueue      shared mem int pointer to GpuConfig::warpSize ints, uninitialized
  * @param[-]     cellQueue      pointer to global memory, 4096 ints per thread, uninitialized
  * @return                      Number of M2P and P2P interactions applied to the group of target particles.
@@ -177,14 +193,14 @@ __device__ void directAcc(Vec4<Tc> sourceBody, Tm hSource, Vec4<Ta> acc_i[TravCo
  * Constant input pointers are additionally marked __restrict__ to indicate to the compiler that loads
  * can be routed through the read-only/texture cache.
  */
-template<class Tc, class Tm, class Tf, class MType>
+template<class Tc, class Th, class Tm, class Ta, class Tf, class MType>
 __device__ util::tuple<unsigned, unsigned>
-traverseWarp(Vec4<Tc>* acc_i, const Vec4<Tc> pos_i[TravConfig::nwt], const Vec3<Tf> targetCenter,
-             const Vec3<Tf> targetSize, const Tc* __restrict__ x, const Tc* __restrict__ y, const Tc* __restrict__ z,
-             const Tm* __restrict__ m, const Tm* __restrict__ h, const TreeNodeIndex* __restrict__ childOffsets,
-             const TreeNodeIndex* __restrict__ internalToLeaf, const LocalIndex* __restrict__ layout,
-             const Vec4<Tf>* __restrict__ sourceCenter, const MType* __restrict__ Multipoles, int2 rootRange,
-             volatile int* tempQueue, int* cellQueue)
+           traverseWarp(Vec4<Ta>* acc_i, const Vec4<Tc> pos_i[TravConfig::nwt], const Vec3<Tf> targetCenter,
+                        const Vec3<Tf> targetSize, const Tc* __restrict__ x, const Tc* __restrict__ y, const Tc* __restrict__ z,
+                        const Tm* __restrict__ m, const Th* __restrict__ h, const TreeNodeIndex* __restrict__ childOffsets,
+                        const TreeNodeIndex* __restrict__ internalToLeaf, const LocalIndex* __restrict__ layout,
+                        const Vec4<Tf>* __restrict__ sourceCenter, const MType* __restrict__ Multipoles, int initNodeIdx,
+                        volatile int* tempQueue, int* cellQueue)
 {
     const int laneIdx = threadIdx.x & (GpuConfig::warpSize - 1);
 
@@ -195,44 +211,45 @@ traverseWarp(Vec4<Tc>* acc_i, const Vec4<Tc> pos_i[TravConfig::nwt], const Vec3<
     int bodyQueue;   // warp queue for source body indices
 
     // populate initial cell queue
-    for (int root = rootRange.x; root < rootRange.y; root += GpuConfig::warpSize)
-    {
-        if (root + laneIdx < rootRange.y) { cellQueue[ringAddr(root - rootRange.x + laneIdx)] = root + laneIdx; }
-    }
+    if (laneIdx == 0) { cellQueue[0] = initNodeIdx; }
 
     // these variables are always identical on all warp lanes
-    int numSources   = rootRange.y - rootRange.x; // current stack size
-    int newSources   = 0;                         // stack size for next level
-    int oldSources   = 0;                         // cell indices done
+    int numSources   = 1; // current stack size
+    int newSources   = 0; // stack size for next level
+    int oldSources   = 0; // cell indices done
     int sourceOffset = 0; // current level stack pointer, once this reaches numSources, the level is done
     int apxFillLevel = 0; // fill level of the multipole approximation warp queue
     int bdyFillLevel = 0; // fill level of the source body warp queue
 
     while (numSources > 0) // While there are source cells to traverse
     {
-        const int      sourceIdx   = sourceOffset + laneIdx;                      // Source cell index of current lane
-        int            sourceQueue = cellQueue[ringAddr(oldSources + sourceIdx)]; // Global source cell index in queue
-        const Vec4<Tf> MAC         = sourceCenter[sourceQueue];                   // load source cell center + MAC
-        const Vec3<Tf> curSrcCenter{MAC[0], MAC[1], MAC[2]};                      // Current source cell center
-        const int      childBegin = childOffsets[sourceQueue];                    // First child cell
+        int sourceIdx   = sourceOffset + laneIdx; // Source cell index of current lane
+        int sourceQueue = 0;
+        if (laneIdx < GpuConfig::warpSize / 8)
+        {
+            sourceQueue = cellQueue[ringAddr(oldSources + sourceIdx)]; // Global source cell index in queue
+        }
+        sourceQueue = spreadSeg8(sourceQueue);
+        sourceIdx   = shflSync(sourceIdx, laneIdx >> 3);
+
+        const Vec4<Tf> MAC = sourceCenter[sourceQueue];        // load source cell center + MAC
+        const Vec3<Tf> curSrcCenter{MAC[0], MAC[1], MAC[2]};   // Current source cell center
+        const int      childBegin = childOffsets[sourceQueue]; // First child cell
         const bool     isNode     = childBegin;
         const bool     isClose    = applyMAC(curSrcCenter, MAC[3], targetCenter, targetSize); // Is too close for MAC
         const bool     isSource   = sourceIdx < numSources; // Source index is within bounds
         const bool     isDirect   = isClose && !isNode && isSource;
-        const int      leafIdx    = (isDirect) ? internalToLeaf[sourceQueue] : 0;  // the cstone leaf index
+        const int      leafIdx    = (isDirect) ? internalToLeaf[sourceQueue] : 0; // the cstone leaf index
 
         // Split
-        const bool isSplit      = isNode && isClose && isSource;       // Source cell must be split
-        const int  numChild     = 8 & -int(isSplit);                   // Number of child cells (masked by split flag)
-        const int  numChildScan = inclusiveScanInt(numChild);          // Inclusive scan of numChild
-        const int  numChildLane = numChildScan - numChild;             // Exclusive scan of numChild
-        const int  numChildWarp = shflSync(numChildScan, GpuConfig::warpSize - 1); // Total numChild of current warp
-        sourceOffset += imin(GpuConfig::warpSize, numSources - sourceOffset);  // advance current level stack pointer
-        if (numChildWarp + numSources - sourceOffset > TravConfig::memPerWarp) // If cell queue overflows
-            return {0xFFFFFFFF, 0xFFFFFFFF};                                   // Exit kernel
-        int childIdx = oldSources + numSources + newSources + numChildLane;    // Child index of current lane
-        for (int i = 0; i < numChild; i++)                                     // Loop over child cells for each lane
-            cellQueue[ringAddr(childIdx + i)] = childBegin + i;                // Queue child cells for next level
+        const bool isSplit      = isNode && isClose && isSource;                  // Source cell must be split
+        const int  numChildLane = cstone::exclusiveScanBool(isSplit);             // Exclusive scan of numChild
+        const int  numChildWarp = cstone::reduceBool(isSplit);                    // Total numChild of current warp
+        sourceOffset += imin(GpuConfig::warpSize / 8, numSources - sourceOffset); // advance current level stack pointer
+        if (numChildWarp + numSources - sourceOffset > TravConfig::memPerWarp)    // If cell queue overflows
+            return {0xFFFFFFFF, 0xFFFFFFFF};                                      // Exit kernel
+        int childIdx = oldSources + numSources + newSources + numChildLane;       // Child index of current lane
+        if (isSplit) { cellQueue[ringAddr(childIdx)] = childBegin; }              // Queue child cells for next level
         newSources += numChildWarp; //  Increment source cell count for next loop
 
         // Multipole approximation
@@ -254,13 +271,13 @@ traverseWarp(Vec4<Tc>* acc_i, const Vec4<Tc> pos_i[TravConfig::nwt], const Vec3<
         }
 
         // Direct
-        bool       directTodo    = isDirect;
-        const int  firstBody     = layout[leafIdx];
-        const int  numBodies     = (layout[leafIdx + 1] - firstBody) & -int(isDirect);  // Number of bodies in cell
-        const int  numBodiesScan = inclusiveScanInt(numBodies);                      // Inclusive scan of numBodies
-        int        numBodiesLane = numBodiesScan - numBodies;                        // Exclusive scan of numBodies
-        int        numBodiesWarp = shflSync(numBodiesScan, GpuConfig::warpSize - 1); // Total numBodies of current warp
-        int        prevBodyIdx   = 0;
+        const int firstBody     = layout[leafIdx];
+        const int numBodies     = (layout[leafIdx + 1] - firstBody) & -int(isDirect); // Number of bodies in cell
+        bool      directTodo    = numBodies;
+        const int numBodiesScan = inclusiveScanInt(numBodies);                      // Inclusive scan of numBodies
+        int       numBodiesLane = numBodiesScan - numBodies;                        // Exclusive scan of numBodies
+        int       numBodiesWarp = shflSync(numBodiesScan, GpuConfig::warpSize - 1); // Total numBodies of current warp
+        int       prevBodyIdx   = 0;
         while (numBodiesWarp > 0) // While there are bodies to process from current source cell set
         {
             tempQueue[laneIdx] = 1; // Default scan input is 1, such that consecutive lanes load consecutive bodies
@@ -341,8 +358,8 @@ __device__ unsigned           maxP2PGlob = 0;
 __device__ unsigned long long sumM2PGlob = 0;
 __device__ unsigned           maxM2PGlob = 0;
 
-__device__ float totalPotentialGlob = 0;
-__device__ unsigned int targetCounterGlob = 0;
+__device__ float        totalPotentialGlob = 0;
+__device__ unsigned int targetCounterGlob  = 0;
 
 __global__ void resetTraversalCounters()
 {
@@ -352,7 +369,7 @@ __global__ void resetTraversalCounters()
     maxM2PGlob = 0;
 
     totalPotentialGlob = 0;
-    targetCounterGlob = 0;
+    targetCounterGlob  = 0;
 }
 
 /*! @brief Compute approximate body accelerations with Barnes-Hut
@@ -361,7 +378,7 @@ __global__ void resetTraversalCounters()
  *                              Otherwise only the global potential sum will be calculated.
  * @param[in]    firstBody      index of first body in @p bodyPos to compute acceleration for
  * @param[in]    lastBody       index (exclusive) of last body in @p bodyPos to compute acceleration for
- * @param[in]    rootRange      (start,end) index pair of cell indices to start traversal from
+ * @param[in]    initNodeIdx    traversal will be started with all children of the parent of @p initNodeIdx
  * @param[in]    x,y,z,m,h      bodies, in SFC order and as referenced by sourceCells
  * @param[in]    childOffsets   location (index in [0:numTreeNodes]) of first child of each cell, 0 indicates a leaf
  * @param[in]    internalToLeaf for each cell in [0:numTreeNodes], stores the leaf cell (cstone) index in [0:numLeaves]
@@ -376,13 +393,13 @@ __global__ void resetTraversalCounters()
  *                              each active warp needs space for TravConfig::memPerWarp int32,
  *                              so the total size is TravConfig::memPerWarp * numWarpsPerBlock * numBlocks
  */
-template<class Tc, class Tm, class Tf, class MType, class P>
+template<class Tc, class Th, class Tm, class Ta, class Tf, class MType, class P>
 __global__ __launch_bounds__(TravConfig::numThreads) void traverse(
-    int firstBody, int lastBody, const int2 rootRange, const Tc* __restrict__ x, const Tc* __restrict__ y,
-    const Tc* __restrict__ z, const Tm* __restrict__ m, const Tm* __restrict__ h,
+    int firstBody, int lastBody, const int initNodeIdx, const Tc* __restrict__ x, const Tc* __restrict__ y,
+    const Tc* __restrict__ z, const Tm* __restrict__ m, const Th* __restrict__ h,
     const TreeNodeIndex* __restrict__ childOffsets, const TreeNodeIndex* __restrict__ internalToLeaf,
     const LocalIndex* __restrict__ layout, const Vec4<Tf>* __restrict__ sourceCenter,
-    const MType* __restrict__ Multipoles, Tc G, P p, Tc* ax, Tc* ay, Tc* az, int* globalPool)
+    const MType* __restrict__ Multipoles, Tc G, P p, Ta* ax, Ta* ay, Ta* az, int* globalPool)
 {
     const int laneIdx = threadIdx.x & (GpuConfig::warpSize - 1);
     const int warpIdx = threadIdx.x >> GpuConfig::warpSizeLog2;
@@ -453,23 +470,9 @@ __global__ __launch_bounds__(TravConfig::numThreads) void traverse(
             acc_i[i] = Vec4<Tc>{Tc(0), Tc(0), Tc(0), Tc(0)};
         }
 
-        auto [numM2P, numP2P] = traverseWarp(acc_i,
-                                             pos_i,
-                                             targetCenter,
-                                             targetSize,
-                                             x,
-                                             y,
-                                             z,
-                                             m,
-                                             h,
-                                             childOffsets,
-                                             internalToLeaf,
-                                             layout,
-                                             sourceCenter,
-                                             Multipoles,
-                                             rootRange,
-                                             tempQueue,
-                                             cellQueue);
+        auto [numM2P, numP2P] =
+            traverseWarp(acc_i, pos_i, targetCenter, targetSize, x, y, z, m, h, childOffsets, internalToLeaf, layout,
+                         sourceCenter, Multipoles, initNodeIdx, tempQueue, cellQueue);
         assert(numM2P != 0xFFFFFFFF && numP2P != 0xFFFFFFFF);
 
         const int bodyIdxLane = bodyBegin + laneIdx;
@@ -525,14 +528,13 @@ __global__ __launch_bounds__(TravConfig::numThreads) void traverse(
  * @param[in]    layout         for each leaf cell in [0:numLeaves], stores the index of the first body in the cell
  * @param[in]    sourceCenter   x,y,z center and square MAC radius of each cell in [0:numTreeNodes]
  * @param[in]    Multipole      cell multipoles, on device
- * @param[in]    levelRange     first and last cell of each level in the source tree, on host
  * @return                      P2P and M2P interaction statistics
  */
-template<class T, class MType, class P>
-auto computeAcceleration(int firstBody, int lastBody, const T* x, const T* y, const T* z, const T* m, const T* h, T G,
-                         P p, T* ax, T* ay, T* az, const TreeNodeIndex* childOffsets,
-                         const TreeNodeIndex* internalToLeaf, const LocalIndex* layout, const Vec4<T>* sourceCenter,
-                         const MType* Multipole, const int2* levelRange)
+template<class Tc, class Th, class Tm, class Ta, class Tf, class MType, class P>
+auto computeAcceleration(size_t firstBody, size_t lastBody, const Tc* x, const Tc* y, const Tc* z, const Tm* m,
+                         const Th* h, Tc G, P p, Ta* ax, Tc* ay, Tc* az, const TreeNodeIndex* childOffsets,
+                         const TreeNodeIndex* internalToLeaf, const LocalIndex* layout, const Vec4<Tf>* sourceCenter,
+                         const MType* Multipole)
 {
     constexpr int numWarpsPerBlock = TravConfig::numThreads / GpuConfig::warpSize;
 
@@ -550,25 +552,9 @@ auto computeAcceleration(int firstBody, int lastBody, const T* x, const T* y, co
 
     resetTraversalCounters<<<1, 1>>>();
     auto t0 = std::chrono::high_resolution_clock::now();
-    traverse<<<numBlocks, TravConfig::numThreads>>>(firstBody,
-                                                    lastBody,
-                                                    {levelRange[1].x, levelRange[1].y},
-                                                    x,
-                                                    y,
-                                                    z,
-                                                    m,
-                                                    h,
-                                                    childOffsets,
-                                                    internalToLeaf,
-                                                    layout,
-                                                    sourceCenter,
-                                                    Multipole,
-                                                    G,
-                                                    p,
-                                                    ax,
-                                                    ay,
-                                                    az,
-                                                    rawPtr(globalPool.data()));
+    traverse<<<numBlocks, TravConfig::numThreads>>>(firstBody, lastBody, 1, x, y, z, m, h, childOffsets, internalToLeaf,
+                                                    layout, sourceCenter, Multipole, G, p, ax, ay, az,
+                                                    rawPtr(globalPool));
     kernelSuccess("traverse");
 
     auto   t1 = std::chrono::high_resolution_clock::now();
@@ -585,15 +571,15 @@ auto computeAcceleration(int firstBody, int lastBody, const T* x, const T* y, co
     float totalPotential;
     checkGpuErrors(cudaMemcpyFromSymbol(&totalPotential, totalPotentialGlob, sizeof(float)));
 
-    util::array<T, 5> interactions;
-    interactions[0] = T(sumP2P) / T(numBodies);
-    interactions[1] = T(maxP2P);
-    interactions[2] = T(sumM2P) / T(numBodies);
-    interactions[3] = T(maxM2P);
+    util::array<Tc, 5> interactions;
+    interactions[0] = Tc(sumP2P) / Tc(numBodies);
+    interactions[1] = Tc(maxP2P);
+    interactions[2] = Tc(sumM2P) / Tc(numBodies);
+    interactions[3] = Tc(maxM2P);
     interactions[4] = totalPotential;
 
-    T flops = (interactions[0] * 20.0 + interactions[2] * 2.0 * powf(ExpansionOrder<MType{}.size()>{}, 3)) *
-              T(numBodies) / dt / 1e12;
+    Tc flops = (interactions[0] * 20.0 + interactions[2] * 2.0 * powf(ExpansionOrder<MType{}.size()>{}, 3)) *
+               Tc(numBodies) / dt / 1e12;
 
     fprintf(stdout, "Traverse             : %.7f s (%.7f TFlops)\n", dt, flops);
 

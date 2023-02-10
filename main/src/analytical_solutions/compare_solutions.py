@@ -26,8 +26,8 @@ simulations.
 
 Usage examples:
     $ python ./compare_solutions.py --version'
-    $ python ./compare_solutions.py dump_sedov.h5part --time 0.018
-    $ python ./compare_solutions.py dump_sedov.h5part --step 100
+    $ python ./compare_solutions.py dump_sedov.h5 --time 0.018
+    $ python ./compare_solutions.py dump_sedov.h5 --step 100
 """
 
 __program__ = "compare_solutions.py"
@@ -66,7 +66,7 @@ def loadTimesteps(h5File):
 
 def loadStepNumbers(h5File):
     """ Load the iteration count of each recorded time step """
-    return np.array(sorted([h5File[step].attrs["step"][0] for step in list(h5File["/"])]))
+    return np.array(sorted([h5File[step].attrs["iteration"][0] for step in list(h5File["/"])]))
 
 
 def determineTimestep(time, timesteps):

@@ -39,7 +39,7 @@
 namespace sphexa
 {
 
-template<class MType, class KeyType, class, class, class>
+template<class MType, class KeyType, class, class, class, class, class>
 class MultipoleHolderCpu
 {
 public:
@@ -50,19 +50,10 @@ public:
     {
         //! includes tree plus associated information, like peer ranks, assignment, counts, centers, etc
         const auto& focusTree = domain.focusTree();
-        //! the focused octree, structure only
-        const cstone::Octree<KeyType>& octree = focusTree.octree();
 
-        reallocate(multipoles_, octree.numTreeNodes(), 1.05);
-
-        ryoanji::computeGlobalMultipoles(d.x.data(),
-                                         d.y.data(),
-                                         d.z.data(),
-                                         d.m.data(),
-                                         d.x.size(),
-                                         domain.globalTree(),
-                                         domain.focusTree(),
-                                         domain.layout().data(),
+        reallocate(multipoles_, focusTree.octreeViewAcc().numNodes, 1.05);
+        ryoanji::computeGlobalMultipoles(d.x.data(), d.y.data(), d.z.data(), d.m.data(), d.x.size(),
+                                         domain.globalTree(), domain.focusTree(), domain.layout().data(),
                                          multipoles_.data());
     }
 
@@ -72,24 +63,15 @@ public:
         //! includes tree plus associated information, like peer ranks, assignment, counts, centers, etc
         const auto& focusTree = domain.focusTree();
         //! the focused octree, structure only
-        const cstone::Octree<KeyType>& octree = focusTree.octree();
+        cstone::OctreeView<const KeyType> octree = focusTree.octreeViewAcc();
 
-        d.egrav = ryoanji::computeGravity(octree,
-                                          focusTree.expansionCenters().data(),
-                                          multipoles_.data(),
-                                          domain.layout().data(),
-                                          domain.startCell(),
-                                          domain.endCell(),
-                                          d.x.data(),
-                                          d.y.data(),
-                                          d.z.data(),
-                                          d.h.data(),
-                                          d.m.data(),
-                                          d.g,
-                                          d.ax.data(),
-                                          d.ay.data(),
-                                          d.az.data());
+        d.egrav = ryoanji::computeGravity(
+            octree.childOffsets, octree.internalToLeaf, octree.numLeafNodes, focusTree.expansionCenters().data(),
+            multipoles_.data(), domain.layout().data(), domain.startCell(), domain.endCell(), d.x.data(), d.y.data(),
+            d.z.data(), d.h.data(), d.m.data(), d.g, d.ax.data(), d.ay.data(), d.az.data());
     }
+
+    util::array<uint64_t, 4> readStats() const { return {0, 0, 0, 0}; }
 
     const MType* multipoles() const { return multipoles_.data(); }
 
@@ -97,13 +79,7 @@ private:
     std::vector<MType> multipoles_;
 };
 
-template<class ThrustVec>
-typename ThrustVec::value_type* rawPtr(ThrustVec& p);
-
-template<class ThrustVec>
-const typename ThrustVec::value_type* rawPtr(const ThrustVec& p);
-
-template<class MType, class KeyType, class Tc, class Tm, class Tf>
+template<class MType, class KeyType, class Tc, class Th, class Tm, class Ta, class Tf>
 class MultipoleHolderGpu
 {
 public:
@@ -114,42 +90,28 @@ public:
     {
         //! includes tree plus associated information, like peer ranks, assignment, counts, centers, etc
         const auto& focusTree = domain.focusTree();
-        //! the focused octree, structure only
-        const cstone::Octree<KeyType>& octree = focusTree.octree();
 
-        reallocate(multipoles_, octree.numTreeNodes(), 1.05);
-
-        mHolder_.upsweep(rawPtr(d.devData.x),
-                         rawPtr(d.devData.y),
-                         rawPtr(d.devData.z),
-                         rawPtr(d.devData.m),
-                         domain.globalTree(),
-                         domain.focusTree(),
-                         domain.layout().data(),
-                         multipoles_.data());
+        reallocate(multipoles_, focusTree.octreeViewAcc().numNodes, 1.05);
+        mHolder_.upsweep(rawPtr(d.devData.x), rawPtr(d.devData.y), rawPtr(d.devData.z), rawPtr(d.devData.m),
+                         domain.globalTree(), domain.focusTree(), domain.layout().data(), multipoles_.data());
     }
 
     template<class Dataset, class Domain>
     void traverse(Dataset& d, const Domain& domain)
     {
-        d.egrav = mHolder_.compute(domain.startIndex(),
-                                   domain.endIndex(),
-                                   rawPtr(d.devData.x),
-                                   rawPtr(d.devData.y),
-                                   rawPtr(d.devData.z),
-                                   rawPtr(d.devData.m),
-                                   rawPtr(d.devData.h),
-                                   d.g,
-                                   rawPtr(d.devData.ax),
-                                   rawPtr(d.devData.ay),
-                                   rawPtr(d.devData.az));
+        d.egrav = mHolder_.compute(domain.startIndex(), domain.endIndex(), rawPtr(d.devData.x), rawPtr(d.devData.y),
+                                   rawPtr(d.devData.z), rawPtr(d.devData.m), rawPtr(d.devData.h), d.g,
+                                   rawPtr(d.devData.ax), rawPtr(d.devData.ay), rawPtr(d.devData.az));
     }
+
+    //! @brief return numP2P, maxP2P, numM2P, maxM2P stats
+    util::array<uint64_t, 4> readStats() const { return mHolder_.readStats(); }
 
     const MType* multipoles() const { return multipoles_.data(); }
 
 private:
-    ryoanji::MultipoleHolder<Tc, Tm, Tf, KeyType, MType> mHolder_;
-    std::vector<MType>                                   multipoles_;
+    ryoanji::MultipoleHolder<Tc, Th, Tm, Ta, Tf, KeyType, MType> mHolder_;
+    std::vector<MType>                                           multipoles_;
 };
 
 } // namespace sphexa

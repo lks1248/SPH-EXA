@@ -51,6 +51,7 @@
 #include <vector>
 
 #include "cstone/domain/domaindecomp.hpp"
+#include "cstone/util/traits.hpp"
 
 namespace cstone
 {
@@ -212,30 +213,22 @@ inline SendList computeHaloReceiveList(gsl::span<const LocalIndex> layout,
     return ret;
 }
 
-//! @brief reallocate arrays to the specified size
-template<class... Arrays>
-void reallocate(std::size_t size, Arrays&... arrays)
+template<class ReorderFunctor, class... Arrays1, class... Arrays2>
+void reorderArrays(const ReorderFunctor& reorderFunctor,
+                   size_t inputOffset,
+                   size_t outputOffset,
+                   std::tuple<Arrays1&...> arrays,
+                   std::tuple<Arrays2&...> scratchBuffers)
 {
-    std::array<std::size_t, sizeof...(Arrays)> capacities{arrays.capacity()...};
-
-    size_t current_capacity = capacities.size() ? capacities[0] : 0;
-    if (size > current_capacity)
+    auto reorderArray = [inputOffset, outputOffset, &reorderFunctor, &scratchBuffers](auto& array)
     {
-        // limit reallocation growth to 5% instead of 200%
-        [[maybe_unused]] auto reserve_size = static_cast<size_t>(double(size) * 1.05);
-        [[maybe_unused]] std::initializer_list<int> list{(arrays.reserve(reserve_size), 0)...};
-    }
-    [[maybe_unused]] std::initializer_list<int> list{(arrays.resize(size), 0)...};
-}
+        auto& swapSpace = util::pickType<decltype(array)>(scratchBuffers);
+        assert(swapSpace.size() == array.size());
+        reorderFunctor(rawPtr(array) + inputOffset, rawPtr(swapSpace) + outputOffset);
+        swap(swapSpace, array);
+    };
 
-template<class R, class... Arrays>
-void reorderArrays(const R& reorderFunctor, size_t inputOffset, size_t outputOffset, Arrays... arrays)
-{
-    auto reorderArray = [inputOffset, outputOffset, &reorderFunctor](auto ptr)
-    { reorderFunctor(ptr + inputOffset, ptr + outputOffset); };
-
-    std::tuple particleArrays{arrays...};
-    for_each_tuple(reorderArray, particleArrays);
+    for_each_tuple(reorderArray, arrays);
 }
 
 } // namespace cstone

@@ -51,7 +51,7 @@ static int multipoleExchangeTest(int thisRank, int numRanks)
     cstone::Box<T> box{-1, 1};
 
     // common pool of coordinates, identical on all ranks
-    RandomGaussianCoordinates<T, cstone::SfcKind<KeyType>> coords(numRanks * numParticles, box);
+    cstone::RandomGaussianCoordinates<T, cstone::SfcKind<KeyType>> coords(numRanks * numParticles, box);
 
     std::vector<T> globalH(numRanks * numParticles, 0.1);
     adjustSmoothingLength<KeyType>(globalH.size(), 5, 10, coords.x(), coords.y(), coords.z(), globalH, box);
@@ -73,37 +73,25 @@ static int multipoleExchangeTest(int thisRank, int numRanks)
 
     cstone::Domain<KeyType, T> domain(thisRank, numRanks, bucketSize, bucketSizeLocal, theta, box);
 
-    domain.syncGrav(particleKeys, x, y, z, h, m);
+    std::vector<T> s1, s2, s3;
+    domain.syncGrav(particleKeys, x, y, z, h, m, std::tuple{}, std::tie(s1, s2, s3));
 
     //! includes tree plus associated information, like peer ranks, assignment, counts, centers, etc
     const cstone::FocusedOctree<KeyType, T>& focusTree = domain.focusTree();
     //! the focused octree, structure only
-    const cstone::Octree<KeyType>&               octree  = focusTree.octree();
+    auto                                         octree  = focusTree.octreeViewAcc();
     gsl::span<const cstone::SourceCenterType<T>> centers = focusTree.expansionCenters();
 
-    std::vector<MultipoleType> multipoles(octree.numTreeNodes());
-    ryoanji::computeGlobalMultipoles(x.data(),
-                                     y.data(),
-                                     z.data(),
-                                     m.data(),
-                                     x.size(),
-                                     domain.globalTree(),
-                                     domain.focusTree(),
-                                     domain.layout().data(),
-                                     multipoles.data());
+    std::vector<MultipoleType> multipoles(octree.numNodes);
+    ryoanji::computeGlobalMultipoles(x.data(), y.data(), z.data(), m.data(), x.size(), domain.globalTree(), focusTree,
+                                     domain.layout().data(), multipoles.data());
 
-    MultipoleType globalRootMultipole = multipoles[octree.levelOffset(0)];
+    MultipoleType globalRootMultipole = multipoles[octree.levelRange[0]];
 
     // compute reference root cell multipole from global particle data
     MultipoleType reference;
-    particle2Multipole(coords.x().data(),
-                       coords.y().data(),
-                       coords.z().data(),
-                       globalMasses.data(),
-                       0,
-                       numParticles * numRanks,
-                       makeVec3(centers[octree.levelOffset(0)]),
-                       reference);
+    particle2Multipole(coords.x().data(), coords.y().data(), coords.z().data(), globalMasses.data(), 0,
+                       numParticles * numRanks, makeVec3(centers[octree.levelRange[0]]), reference);
 
     double maxDiff = max(abs(reference - globalRootMultipole));
 

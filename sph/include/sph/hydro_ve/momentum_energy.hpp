@@ -31,47 +31,54 @@
 
 #pragma once
 
+#include "sph/sph_gpu.hpp"
 #include "momentum_energy_kern.hpp"
-#include "sph/sph.cuh"
-#include "sph/traits.hpp"
 
 namespace sph
 {
 
-template<class T, class Dataset>
-void computeMomentumEnergyImpl(size_t startIndex, size_t endIndex, size_t ngmax, Dataset& d, const cstone::Box<T>& box)
+template<bool avClean, class T, class Dataset>
+void computeMomentumEnergyImpl(size_t startIndex, size_t endIndex, unsigned ngmax, Dataset& d,
+                               const cstone::Box<T>& box)
 {
-    const int* neighbors      = d.neighbors.data();
-    const int* neighborsCount = d.neighborsCount.data();
+    const cstone::LocalIndex* neighbors      = d.neighbors.data();
+    const unsigned*           neighborsCount = d.nc.data();
 
-    const T* h     = d.h.data();
-    const T* m     = d.m.data();
-    const T* x     = d.x.data();
-    const T* y     = d.y.data();
-    const T* z     = d.z.data();
-    const T* vx    = d.vx.data();
-    const T* vy    = d.vy.data();
-    const T* vz    = d.vz.data();
-    const T* c     = d.c.data();
-    const T* prho  = d.prho.data();
-    const T* alpha = d.alpha.data();
+    const auto* h     = d.h.data();
+    const auto* m     = d.m.data();
+    const auto* x     = d.x.data();
+    const auto* y     = d.y.data();
+    const auto* z     = d.z.data();
+    const auto* vx    = d.vx.data();
+    const auto* vy    = d.vy.data();
+    const auto* vz    = d.vz.data();
+    const auto* c     = d.c.data();
+    const auto* prho  = d.prho.data();
+    const auto* alpha = d.alpha.data();
 
-    const T* c11 = d.c11.data();
-    const T* c12 = d.c12.data();
-    const T* c13 = d.c13.data();
-    const T* c22 = d.c22.data();
-    const T* c23 = d.c23.data();
-    const T* c33 = d.c33.data();
+    const auto* c11 = d.c11.data();
+    const auto* c12 = d.c12.data();
+    const auto* c13 = d.c13.data();
+    const auto* c22 = d.c22.data();
+    const auto* c23 = d.c23.data();
+    const auto* c33 = d.c33.data();
 
-    T* du       = d.du.data();
-    T* grad_P_x = d.ax.data();
-    T* grad_P_y = d.ay.data();
-    T* grad_P_z = d.az.data();
+    const auto* dV11 = d.dV11.data();
+    const auto* dV12 = d.dV12.data();
+    const auto* dV13 = d.dV13.data();
+    const auto* dV22 = d.dV22.data();
+    const auto* dV23 = d.dV23.data();
+    const auto* dV33 = d.dV33.data();
 
-    const T* wh  = d.wh.data();
-    const T* whd = d.whd.data();
-    const T* kx  = d.kx.data();
-    const T* xm  = d.xm.data();
+    auto* du       = d.du.data();
+    auto* grad_P_x = d.ax.data();
+    auto* grad_P_y = d.ay.data();
+    auto* grad_P_z = d.az.data();
+
+    const auto* wh  = d.wh.data();
+    const auto* whd = d.whd.data();
+    const auto* kx  = d.kx.data();
+    const auto* xm  = d.xm.data();
 
     const T K         = d.K;
     const T sincIndex = d.sincIndex;
@@ -84,45 +91,15 @@ void computeMomentumEnergyImpl(size_t startIndex, size_t endIndex, size_t ngmax,
 #pragma omp parallel for schedule(static) reduction(min : minDt)
     for (size_t i = startIndex; i < endIndex; ++i)
     {
-        size_t ni = i - startIndex;
+        size_t   ni = i - startIndex;
+        unsigned nc = stl::min(neighborsCount[i], ngmax);
 
         T maxvsignal = 0;
 
-        momentumAndEnergyJLoop(i,
-                               sincIndex,
-                               K,
-                               box,
-                               neighbors + ngmax * ni,
-                               neighborsCount[i],
-                               x,
-                               y,
-                               z,
-                               vx,
-                               vy,
-                               vz,
-                               h,
-                               m,
-                               prho,
-                               c,
-                               c11,
-                               c12,
-                               c13,
-                               c22,
-                               c23,
-                               c33,
-                               Atmin,
-                               Atmax,
-                               ramp,
-                               wh,
-                               whd,
-                               kx,
-                               xm,
-                               alpha,
-                               grad_P_x,
-                               grad_P_y,
-                               grad_P_z,
-                               du,
-                               &maxvsignal);
+        momentumAndEnergyJLoop<avClean>(i, sincIndex, K, box, neighbors + ngmax * ni, nc, x, y, z, vx, vy, vz, h, m,
+                                        prho, c, c11, c12, c13, c22, c23, c33, Atmin, Atmax, ramp, wh, whd, kx, xm,
+                                        alpha, dV11, dV12, dV13, dV22, dV23, dV33, grad_P_x, grad_P_y, grad_P_z, du,
+                                        &maxvsignal);
 
         T dt_i = tsKCourant(maxvsignal, h[i], c[i], d.Kcour);
         minDt  = std::min(minDt, dt_i);
@@ -131,14 +108,14 @@ void computeMomentumEnergyImpl(size_t startIndex, size_t endIndex, size_t ngmax,
     d.minDt_loc = minDt;
 }
 
-template<class T, class Dataset>
-void computeMomentumEnergy(size_t startIndex, size_t endIndex, size_t ngmax, Dataset& d, const cstone::Box<T>& box)
+template<bool avClean, class T, class Dataset>
+void computeMomentumEnergy(size_t startIndex, size_t endIndex, unsigned ngmax, Dataset& d, const cstone::Box<T>& box)
 {
-    if constexpr (sphexa::HaveGpu<typename Dataset::AcceleratorType>{})
+    if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
     {
-        cuda::computeMomentumEnergy(startIndex, endIndex, ngmax, d, box);
+        cuda::computeMomentumEnergy<avClean>(startIndex, endIndex, ngmax, d, box);
     }
-    else { computeMomentumEnergyImpl(startIndex, endIndex, ngmax, d, box); }
+    else { computeMomentumEnergyImpl<avClean>(startIndex, endIndex, ngmax, d, box); }
 }
 
 } // namespace sph

@@ -1,4 +1,5 @@
 ![License](https://img.shields.io/github/license/unibas-dmi-hpc/SPH-EXA_mini-app)
+[![Documentation Status](https://readthedocs.org/projects/sph-exa/badge/?version=latest)](https://sph-exa.readthedocs.io/en/latest/?badge=latest)
 [![Unit tests](https://github.com/unibas-dmi-hpc/SPH-EXA_mini-app/actions/workflows/unittest.yml/badge.svg?branch=develop)](https://github.com/unibas-dmi-hpc/SPH-EXA_mini-app/actions/workflows/unittest.yml)
 ![GitHub release (latest by date including pre-releases)](https://img.shields.io/github/v/release/unibas-dmi-hpc/SPH-EXA_mini-app?include_prereleases)
 <p align="center">
@@ -21,12 +22,14 @@ and the absence of a structured grid.
 [ChaNGa](http://faculty.washington.edu/trq/hpcc/tools/changa.html),
 and [SPH-flow](http://www.sph-flow.com) are the three SPH codes selected in the PASC SPH-EXA project to
 act as parent and reference codes to SPH-EXA.
-The performance of these three codes is negatively impacted by factors such as imbalanced multi-scale physics, individual time-stepping, halos exchange, and long-range forces.
-Therefore, the goal is to extrapolate their common basic SPH features, and consolidate them in a fully optimized, Exascale-ready, MPI+X, SPH code: SPH-EXA.
+The performance of these three codes is negatively impacted by factors such as imbalanced multi-scale physics,
+individual time-stepping, halos exchange, and long-range forces.
+Therefore, the goal is to extrapolate their common basic SPH features, and consolidate them in a fully optimized,
+Exascale-ready, MPI+X, SPH code: SPH-EXA.
 
 # SPH-EXA
 
-SPH-EXA is a C++17 simulation code, parallelized with MPI, OpenMP, CUDA and HIP.
+SPH-EXA is a C++20 simulation code for hydrodynamics simulations (with gravity and other physics), parallelized with MPI, OpenMP, CUDA, and HIP.
 
 [Check our wiki for more details](https://github.com/unibas-dmi-hpc/SPH-EXA_mini-app/wiki)
 
@@ -62,14 +65,21 @@ SPH-EXA
 │   │    └── sph
 │   └─── test                       - SPH kernel unit tests
 │
-└── src
+└── main/src
     ├── init                        - initial conditions for test cases
     ├── io                          - file output functionality
     └── sphexa                      - SPH main application front-end
 ```
-#### Compile
+#### Toolchain requirements
 
-Use the following commands to compile the main SPH-EXA application:
+The C++ (.cpp) part of the code requires a **C++20 compiler**, at least GCC 10, clang 12 or cray-clang 14.
+For CUDA (.cu), the minimum supported CUDA version is **CUDA 11.2** with a C++17 host compiler, e.g. GCC 9.3.0.
+
+Note that GCC 10.3.0 does not work as CUDA host compiler due to known compiler bugs.
+For ease of use, the recommended minimum version of CUDA is 11.4.1 which supports GCC 11, providing both the required
+C++20 support and bug-free CUDA host compilation. [**NOTE:** CUDA/11.3.1 seems to have solved the compatibility issues with GCC 10.3.0]
+
+#### Compilation
 
 Minimal CMake configuration:
 ```shell
@@ -77,24 +87,36 @@ mkdir build
 cd build
 cmake <GIT_SOURCE_DIR>
 ```
-
-Recommended CMake configuration on Piz Daint,
-using the (default) Cray Clang compiler for CPU code (.cpp) and nvcc/g++ for GPU code (.cu):
+Compilation at sciCORE (UniBas):
 ```shell
-module load daint-gpu
-module load cudatoolkit/11.2.0_3.39-2.1__gf93aa1c # or newer
-module load CMake/3.22.1               # or newer
-module load cray-hdf5-parallel
-module load gcc/9.3.0                  # nvcc uses gcc as the default host compiler,
-                                       # but the system version is too old
-export GCC_X86_64=/opt/gcc/9.3.0/snos  # system header versions are too old, applies to cray-clang too
+ml HDF5/1.10.7-gompi-2021a
+ml CMake/3.23.1-GCCcore-10.3.0
+ml CUDA/11.3.1
 
 mkdir build
 cd build
-cmake -DCMAKE_CXX_COMPILER=CC <GIT_SOURCE_DIR>
+cmake <GIT_SOURCE_DIR>
+```
+CMake configuration on Piz Daint for clang:
+**Cray-clang 14** for CPU code (.cpp), **CUDA 11.6 + GCC 11.2.0** for GPU code (.cu):
+```shell
+module load daint-gpu
+module load CMake/3.22.1
+module load PrgEnv-cray
+module load cdt/22.05           # will load cce/14.0.0
+module load nvhpc-nompi/22.2    # will load nvcc/11.6
+module load gcc/11.2.0
+module load cray-hdf5-parallel
+
+mkdir build
+cd build
+
+# C-compiler is needed for hdf5 detection
+CC=cc CXX=CC cmake -DCMAKE_CUDA_ARCHITECTURES=60 -S <GIT_SOURCE_DIR>
+
 ```
 
-* Build everything: ```make -j```
+Build everything: ```make -j```
 
 
 #### Running the main application
@@ -118,10 +140,10 @@ Example usage:
   Runs Sedov with 100^3 particles for 1000 iterations (time-steps) with 4 OpenMP
   threads and dumps particle xyz-coordinates, density and pressure data every 10 iterations
 * ```OMP_NUM_THREADS=4 ./sphexa-cuda --init -n 100 -s 1000 -w 10 -f x,y,z,rho,p```
-  Runs Sedov with 100^3 million particles for 1000 iterations (time-steps) with 4 OpenMP
+  Runs Sedov with 100^3 particles for 1000 iterations (time-steps) with 4 OpenMP
   threads. Uses the GPU for most of the compute work.
 * ```OMP_NUM_THREADS=4 mpiexec -np 2 ./sphexa --init noh -n 100 -s 1000 -w 10```
-  Runs Noh with 100^3 million particles for 1000 iterations (time-steps) with 2 MPI ranks of 4 OpenMP
+  Runs Noh with 100^3 particles for 1000 iterations (time-steps) with 2 MPI ranks of 4 OpenMP
   threads each. Works when using MPICH. For OpenMPI, use ```mpirun```  instead.
 * ```OMP_NUM_THREADS=12 srun -Cgpu -A<your account> -n<nnodes> -c12 ./sphexa-cuda --init sedov -n 100 -s 1000 -w 10```
   Optimal runtime configuration on Piz Daint for `nnodes` GPU compute nodes. Launches 1 MPI rank with
@@ -130,6 +152,18 @@ Example usage:
   Run SPH-EXA, initializing particle data from an input file (e.g. for the Evrard collapse). Includes
   gravitational forces between particles. The angle dependent accuracy parameter theta can be specificed
   with ```--theta <value>```, the default is `0.5`.
+
+#### Restarting from checkpoint files
+
+If output to file is enabled and if the ```-f``` option is not provided, sphexa will output all conserved particle
+fields which allows restoring the simulation to the exact state at the time of writing the output.
+This includes the following fields ```x_m1, y_m1, z_m1, du_m1```.
+In order to save diskspace, sphexa can be instructed to omit these fields by setting the ```-f option```, e.g.
+```-f x,y,z,m,h,temp,alpha,vx,vy,vz```. If one wants to restart the simulation from an output file containing
+these fields, it is necessary to add the ```_m1```. We provide an example script that can be used to achieve this:
+```bash
+./scripts/add_m1.py <hdf5-output-file>
+```
 
 #### Running the unit, integration and regression tests
 
@@ -192,6 +226,7 @@ and a warp-aware tree-traversal inspired by the
 * Ruben Cabezon
 * Aurelien Cavelan
 * Florina Ciorba
+* Jean M. Favre
 * Michal Grabarczyk
 * Danilo Guerrera
 * David Imbert
@@ -216,4 +251,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
    * [SPH-EXA project 2](https://www.pasc-ch.org/projects/2021-2024/sph-exa2/) and [webpage](https://hpc.dmi.unibas.ch/en/research/pasc-sph-exa2/)
 * [Swiss National Supercomputing Center (CSCS)](https://www.cscs.ch/)
 * [Scientific Computing Center of the University of Basel (sciCORE)](https://scicore.unibas.ch/)
-* [Swiss participation in Square Kilometer Aray (SKA)](https://www.sbfi.admin.ch/sbfi/en/home/research-and-innovation/international-cooperation-r-and-i/international-research-organisations/skao.html)
+* [Swiss participation in Square Kilometer Array (SKA)](https://www.sbfi.admin.ch/sbfi/en/home/research-and-innovation/international-cooperation-r-and-i/international-research-organisations/skao.html)

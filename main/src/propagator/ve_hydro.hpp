@@ -34,6 +34,10 @@
 
 #include <variant>
 
+#include "cstone/fields/particles_get.hpp"
+#include "sph/particles_data.hpp"
+#include "sph/sph.hpp"
+
 #include "ipropagator.hpp"
 #include "gravity_wrapper.hpp"
 
@@ -41,142 +45,153 @@ namespace sphexa
 {
 
 using namespace sph;
+using cstone::FieldList;
 
-template<class DomainType, class ParticleDataType>
-class HydroVeProp final : public Propagator<DomainType, ParticleDataType>
+template<bool avClean, class DomainType, class DataType>
+class HydroVeProp : public Propagator<DomainType, DataType>
 {
-    using Base = Propagator<DomainType, ParticleDataType>;
+protected:
+    using Base = Propagator<DomainType, DataType>;
     using Base::ng0_;
     using Base::ngmax_;
     using Base::timer;
 
-    using T             = typename ParticleDataType::RealType;
-    using KeyType       = typename ParticleDataType::KeyType;
-    using MultipoleType = ryoanji::CartesianQuadrupole<float>;
+    using T             = typename DataType::RealType;
+    using KeyType       = typename DataType::KeyType;
+    using Tmass         = typename DataType::HydroData::Tmass;
+    using MultipoleType = ryoanji::CartesianQuadrupole<Tmass>;
 
-    using Acc = typename ParticleDataType::AcceleratorType;
+    using Acc = typename DataType::AcceleratorType;
     using MHolder_t =
-        typename detail::AccelSwitchType<Acc, MultipoleHolderCpu, MultipoleHolderGpu>::template type<MultipoleType,
-                                                                                                     KeyType, T, T, T>;
+        typename cstone::AccelSwitchType<Acc, MultipoleHolderCpu,
+                                         MultipoleHolderGpu>::template type<MultipoleType, KeyType, T, T, Tmass, T, T>;
 
     MHolder_t mHolder_;
+
+    /*! @brief the list of conserved particles fields with values preserved between iterations
+     *
+     * x, y, z, h and m are automatically considered conserved and must not be specified in this list
+     */
+    using ConservedFields = FieldList<"temp", "vx", "vy", "vz", "x_m1", "y_m1", "z_m1", "du_m1", "alpha">;
+
+    //! @brief list of dependent fields, these may be used as scratch space during domain sync
+    using DependentFields_ =
+        FieldList<"prho", "c", "ax", "ay", "az", "du", "c11", "c12", "c13", "c22", "c23", "c33", "xm", "kx", "nc">;
+
+    //! @brief velocity gradient fields will only be allocated when avClean is true
+    using GradVFields = FieldList<"dV11", "dV12", "dV13", "dV22", "dV23", "dV33">;
+
+    //! @brief what will be allocated based AV cleaning choice
+    using DependentFields =
+        std::conditional_t<avClean, decltype(DependentFields_{} + GradVFields{}), decltype(DependentFields_{})>;
 
 public:
     HydroVeProp(size_t ngmax, size_t ng0, std::ostream& output, size_t rank)
         : Base(ngmax, ng0, output, rank)
     {
+        if (avClean && rank == 0) { std::cout << "AV cleaning is activated" << std::endl; }
     }
 
-    void activateFields(ParticleDataType& d) override
+    std::vector<std::string> conservedFields() const override
     {
-        d.setConserved("x", "y", "z", "h", "m", "u", "vx", "vy", "vz", "x_m1", "y_m1", "z_m1", "du_m1", "alpha");
-        d.setDependent("prho",
-                       "c",
-                       "ax",
-                       "ay",
-                       "az",
-                       "du",
-                       "c11",
-                       "c12",
-                       "c13",
-                       "c22",
-                       "c23",
-                       "c33",
-                       "xm",
-                       "kx",
-                       "divv",
-                       "curlv",
-                       "keys",
-                       "nc");
-
-        d.devData.setConserved("x", "y", "z", "h", "m", "vx", "vy", "vz", "alpha");
-        d.devData.setDependent(
-            "prho", "c", "kx", "xm", "ax", "ay", "az", "du", "c11", "c12", "c13", "c22", "c23", "c33", "keys");
+        std::vector<std::string> ret{"x", "y", "z", "h", "m"};
+        for_each_tuple([&ret](auto f) { ret.push_back(f.value); }, make_tuple(ConservedFields{}));
+        return ret;
     }
 
-    void sync(DomainType& domain, ParticleDataType& d) override
+    void activateFields(DataType& simData) override
     {
+        auto& d = simData.hydro;
+        //! @brief Fields accessed in domain sync (x,y,z,h,m,keys) are not part of extensible lists.
+        d.setConserved("x", "y", "z", "h", "m");
+        d.setDependent("keys");
+        std::apply([&d](auto... f) { d.setConserved(f.value...); }, make_tuple(ConservedFields{}));
+        std::apply([&d](auto... f) { d.setDependent(f.value...); }, make_tuple(DependentFields{}));
+
+        d.devData.setConserved("x", "y", "z", "h", "m");
+        d.devData.setDependent("keys");
+        std::apply([&d](auto... f) { d.devData.setConserved(f.value...); }, make_tuple(ConservedFields{}));
+        std::apply([&d](auto... f) { d.devData.setDependent(f.value...); }, make_tuple(DependentFields{}));
+    }
+
+    void sync(DomainType& domain, DataType& simData) override
+    {
+        auto& d = simData.hydro;
         if (d.g != 0.0)
         {
-            domain.syncGrav(
-                d.codes, d.x, d.y, d.z, d.h, d.m, d.u, d.vx, d.vy, d.vz, d.x_m1, d.y_m1, d.z_m1, d.du_m1, d.alpha);
+            domain.syncGrav(get<"keys">(d), get<"x">(d), get<"y">(d), get<"z">(d), get<"h">(d), get<"m">(d),
+                            get<ConservedFields>(d), get<DependentFields>(d));
         }
         else
         {
-            domain.sync(
-                d.codes, d.x, d.y, d.z, d.h, d.m, d.u, d.vx, d.vy, d.vz, d.x_m1, d.y_m1, d.z_m1, d.du_m1, d.alpha);
+            domain.sync(get<"keys">(d), get<"x">(d), get<"y">(d), get<"z">(d), get<"h">(d),
+                        std::tuple_cat(std::tie(get<"m">(d)), get<ConservedFields>(d)), get<DependentFields>(d));
         }
+        d.treeView = domain.octreeNsViewAcc();
     }
 
-    void step(DomainType& domain, ParticleDataType& d) override
+    void computeForces(DomainType& domain, DataType& simData)
     {
         timer.start();
-        sync(domain, d);
+        sync(domain, simData);
         timer.step("domain::sync");
 
+        auto& d = simData.hydro;
         d.resize(domain.nParticlesWithHalos());
         resizeNeighbors(d, domain.nParticles() * ngmax_);
         size_t first = domain.startIndex();
         size_t last  = domain.endIndex();
 
-        std::fill(begin(d.m), begin(d.m) + first, d.m[first]);
-        std::fill(begin(d.m) + last, end(d.m), d.m[first]);
+        transferToHost(d, first, first + 1, {"m"});
+        fill(get<"m">(d), 0, first, d.m[first]);
+        fill(get<"m">(d), last, domain.nParticlesWithHalos(), d.m[first]);
 
-        findNeighborsSfc<T, KeyType>(
-            first, last, ngmax_, d.x, d.y, d.z, d.h, d.codes, d.neighbors, d.neighborsCount, domain.box());
+        findNeighborsSfc(first, last, ngmax_, d, domain.box());
         timer.step("FindNeighbors");
 
-        transferToDevice(d, 0, domain.nParticlesWithHalos(), {"x", "y", "z", "h", "m", "keys"});
         computeXMass(first, last, ngmax_, d, domain.box());
-        transferToHost(d, first, last, {"xm"});
         timer.step("XMass");
-        domain.exchangeHalos(d.xm);
+        domain.exchangeHalos(std::tie(get<"xm">(d)), get<"ax">(d), get<"ay">(d));
         timer.step("mpi::synchronizeHalos");
 
-        d.release("ax", "ay");
-        d.acquire("p", "gradh");
+        d.release("ax");
         d.devData.release("ax");
+        d.acquire("gradh");
         d.devData.acquire("gradh");
-        transferToDevice(d, 0, first, {"xm"});
-        transferToDevice(d, last, domain.nParticlesWithHalos(), {"xm"});
         computeVeDefGradh(first, last, ngmax_, d, domain.box());
         timer.step("Normalization & Gradh");
-        transferToHost(d, first, last, {"kx", "gradh"});
+
         computeEOS(first, last, d);
         timer.step("EquationOfState");
 
-        domain.exchangeHalos(d.vx, d.vy, d.vz, d.prho, d.c, d.kx);
+        domain.exchangeHalos(get<"vx", "vy", "vz", "prho", "c", "kx">(d), get<"gradh">(d), get<"ay">(d));
         timer.step("mpi::synchronizeHalos");
 
-        d.release("p", "gradh");
-        d.acquire("ax", "ay");
+        d.release("gradh", "ay");
         d.devData.release("gradh", "ay");
+        d.acquire("divv", "curlv");
         d.devData.acquire("divv", "curlv");
-        transferToDevice(d, 0, domain.nParticlesWithHalos(), {"vx", "vy", "vz"});
-        transferToDevice(d, 0, first, {"kx"});
-        transferToDevice(d, last, domain.nParticlesWithHalos(), {"kx"});
         computeIadDivvCurlv(first, last, ngmax_, d, domain.box());
-        transferToHost(d, first, last, {"c11", "c12", "c13", "c22", "c23", "c33", "divv", "curlv"});
         timer.step("IadVelocityDivCurl");
 
-        domain.exchangeHalos(d.c11, d.c12, d.c13, d.c22, d.c23, d.c33, d.divv);
+        domain.exchangeHalos(get<"c11", "c12", "c13", "c22", "c23", "c33", "divv">(d), get<"az">(d), get<"du">(d));
         timer.step("mpi::synchronizeHalos");
 
-        transferToDevice(d, 0, first, {"divv"});
-        transferToDevice(d, last, domain.nParticlesWithHalos(), {"divv"});
         computeAVswitches(first, last, ngmax_, d, domain.box());
-        transferToHost(d, first, last, {"alpha"});
         timer.step("AVswitches");
 
-        domain.exchangeHalos(d.alpha);
+        if (avClean)
+        {
+            domain.exchangeHalos(get<"dV11", "dV12", "dV22", "dV23", "dV33", "alpha">(d), get<"az">(d), get<"du">(d));
+        }
+        else { domain.exchangeHalos(std::tie(get<"alpha">(d)), get<"az">(d), get<"du">(d)); }
         timer.step("mpi::synchronizeHalos");
 
+        d.release("divv", "curlv");
         d.devData.release("divv", "curlv");
+        d.acquire("ax", "ay");
         d.devData.acquire("ax", "ay");
-        transferToDevice(d, 0, domain.nParticlesWithHalos(), {"c", "prho"});
-        transferToDevice(d, 0, first, {"c11", "c12", "c13", "c22", "c23", "c33", "alpha"});
-        transferToDevice(d, last, domain.nParticlesWithHalos(), {"c11", "c12", "c13", "c22", "c23", "c33", "alpha"});
-        computeMomentumEnergy(first, last, ngmax_, d, domain.box());
+        computeMomentumEnergy<avClean>(first, last, ngmax_, d, domain.box());
         timer.step("MomentumAndEnergy");
 
         if (d.g != 0.0)
@@ -186,9 +201,17 @@ public:
             mHolder_.traverse(d, domain);
             timer.step("Gravity");
         }
-        transferToHost(d, first, last, {"ax", "ay", "az", "du"});
+    }
 
-        computeTimestep(first, last, d);
+    void step(DomainType& domain, DataType& simData) override
+    {
+        computeForces(domain, simData);
+
+        auto&  d     = simData.hydro;
+        size_t first = domain.startIndex();
+        size_t last  = domain.endIndex();
+
+        computeTimestep(d);
         timer.step("Timestep");
         computePositions(first, last, d, domain.box());
         timer.step("UpdateQuantities");
@@ -198,19 +221,57 @@ public:
         timer.stop();
     }
 
-    //! @brief configure the dataset for output by calling EOS again to recover rho and p
-    void prepareOutput(ParticleDataType& d, size_t startIndex, size_t endIndex) override
+    void saveFields(IFileWriter* writer, size_t first, size_t last, DataType& simData,
+                    const cstone::Box<T>& box) override
     {
-        d.release("c11", "c12", "c13");
-        d.acquire("rho", "p", "gradh");
-        computeEOS(startIndex, endIndex, d);
-    }
+        auto&            d             = simData.hydro;
+        auto             fieldPointers = d.data();
+        std::vector<int> outputFields  = d.outputFieldIndices;
 
-    //! @brief undo output configuration and restore compute configuration
-    void finishOutput(ParticleDataType& d) override
-    {
+        auto output = [&]()
+        {
+            for (int i = int(outputFields.size()) - 1; i >= 0; --i)
+            {
+                int fidx = outputFields[i];
+                if (d.isAllocated(fidx))
+                {
+                    int column = std::find(d.outputFieldIndices.begin(), d.outputFieldIndices.end(), fidx) -
+                                 d.outputFieldIndices.begin();
+                    transferToHost(d, first, last, {d.fieldNames[fidx]});
+                    std::visit([writer, c = column, key = d.fieldNames[fidx]](auto field)
+                               { writer->writeField(key, field->data(), c); },
+                               fieldPointers[fidx]);
+                    outputFields.erase(outputFields.begin() + i);
+                }
+            }
+        };
+
+        // first output pass: write everything allocated at the end of the step
+        output();
+
+        d.release("ax", "ay", "az");
+        d.devData.release("ax", "ay", "az");
+
+        // second output pass: write temporary quantities produced by the EOS
+        d.acquire("rho", "p", "gradh");
+        d.devData.acquire("rho", "p", "gradh");
+        computeEOS(first, last, d);
+        output();
+        d.devData.release("rho", "p", "gradh");
         d.release("rho", "p", "gradh");
-        d.acquire("c11", "c12", "c13");
+
+        // third output pass: curlv and divv
+        d.acquire("divv", "curlv");
+        d.devData.acquire("divv", "curlv");
+        if (!outputFields.empty()) { computeIadDivvCurlv(first, last, ngmax_, d, box); }
+        output();
+        d.release("divv", "curlv");
+        d.devData.release("divv", "curlv");
+
+        d.acquire("ax", "ay", "az");
+        d.devData.acquire("ax", "ay", "az");
+
+        if (!outputFields.empty()) { std::cout << "WARNING: not all fields were output" << std::endl; }
     }
 };
 

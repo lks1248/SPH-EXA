@@ -31,104 +31,72 @@
 
 #pragma once
 
-#include "iad_kern.hpp"
+#include "sph/sph_gpu.hpp"
 #include "divv_curlv_kern.hpp"
-#include "sph/sph.cuh"
-#include "sph/traits.hpp"
+#include "iad_kern.hpp"
 
 namespace sph
 {
 
-template<class T, class Dataset>
-void computeIadDivvCurlvImpl(size_t startIndex, size_t endIndex, size_t ngmax, Dataset& d, const cstone::Box<T>& box)
+template<class Tc, class Dataset>
+void computeIadDivvCurlvImpl(size_t startIndex, size_t endIndex, unsigned ngmax, Dataset& d, const cstone::Box<Tc>& box)
 {
-    const int* neighbors      = d.neighbors.data();
-    const int* neighborsCount = d.neighborsCount.data();
+    const cstone::LocalIndex* neighbors      = d.neighbors.data();
+    const unsigned*           neighborsCount = d.nc.data();
 
-    const T* x  = d.x.data();
-    const T* y  = d.y.data();
-    const T* z  = d.z.data();
-    const T* vx = d.vx.data();
-    const T* vy = d.vy.data();
-    const T* vz = d.vz.data();
-    const T* h  = d.h.data();
+    const auto* x  = d.x.data();
+    const auto* y  = d.y.data();
+    const auto* z  = d.z.data();
+    const auto* vx = d.vx.data();
+    const auto* vy = d.vy.data();
+    const auto* vz = d.vz.data();
+    const auto* h  = d.h.data();
 
-    T* c11 = d.c11.data();
-    T* c12 = d.c12.data();
-    T* c13 = d.c13.data();
-    T* c22 = d.c22.data();
-    T* c23 = d.c23.data();
-    T* c33 = d.c33.data();
+    auto* c11 = d.c11.data();
+    auto* c12 = d.c12.data();
+    auto* c13 = d.c13.data();
+    auto* c22 = d.c22.data();
+    auto* c23 = d.c23.data();
+    auto* c33 = d.c33.data();
 
-    T* divv  = d.divv.data();
-    T* curlv = d.curlv.data();
+    auto* dV11 = d.dV11.data();
+    auto* dV12 = d.dV12.data();
+    auto* dV13 = d.dV13.data();
+    auto* dV22 = d.dV22.data();
+    auto* dV23 = d.dV23.data();
+    auto* dV33 = d.dV33.data();
 
-    const T* wh  = d.wh.data();
-    const T* whd = d.whd.data();
-    const T* kx  = d.kx.data();
-    const T* xm  = d.xm.data();
+    bool doGradV = d.dV11.size() == d.x.size();
 
-    const T K         = d.K;
-    const T sincIndex = d.sincIndex;
+    auto* divv  = d.divv.data();
+    auto* curlv = d.curlv.data();
+
+    const auto* wh  = d.wh.data();
+    const auto* whd = d.whd.data();
+    const auto* kx  = d.kx.data();
+    const auto* xm  = d.xm.data();
+
+    const auto K         = d.K;
+    const auto sincIndex = d.sincIndex;
 
 #pragma omp parallel for
     for (size_t i = startIndex; i < endIndex; ++i)
     {
-        size_t ni = i - startIndex;
+        size_t   ni = i - startIndex;
+        unsigned nc = std::min(neighborsCount[i], ngmax);
 
-        IADJLoop(i,
-                 sincIndex,
-                 K,
-                 box,
-                 neighbors + ngmax * ni,
-                 neighborsCount[i],
-                 x,
-                 y,
-                 z,
-                 h,
-                 wh,
-                 whd,
-                 xm,
-                 kx,
-                 c11,
-                 c12,
-                 c13,
-                 c22,
-                 c23,
+        IADJLoop(i, sincIndex, K, box, neighbors + ngmax * ni, nc, x, y, z, h, wh, whd, xm, kx, c11, c12, c13, c22, c23,
                  c33);
 
-        divV_curlVJLoop(i,
-                        sincIndex,
-                        K,
-                        box,
-                        neighbors + ngmax * ni,
-                        neighborsCount[i],
-                        x,
-                        y,
-                        z,
-                        vx,
-                        vy,
-                        vz,
-                        h,
-                        c11,
-                        c12,
-                        c13,
-                        c22,
-                        c23,
-                        c33,
-                        wh,
-                        whd,
-                        kx,
-                        xm,
-                        divv,
-                        curlv);
+        divV_curlVJLoop(i, sincIndex, K, box, neighbors + ngmax * ni, nc, x, y, z, vx, vy, vz, h, c11, c12, c13, c22,
+                        c23, c33, wh, whd, kx, xm, divv, curlv, dV11, dV12, dV13, dV22, dV23, dV33, doGradV);
     }
 }
 
-template<class T, class Dataset>
-void computeIadDivvCurlv(size_t startIndex, size_t endIndex, size_t ngmax, Dataset& d, const cstone::Box<T>& box)
+template<class Tc, class Dataset>
+void computeIadDivvCurlv(size_t startIndex, size_t endIndex, unsigned ngmax, Dataset& d, const cstone::Box<Tc>& box)
 {
-    if constexpr (sphexa::HaveGpu<typename Dataset::AcceleratorType>{})
+    if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
     {
         cuda::computeIadDivvCurlv(startIndex, endIndex, ngmax, d, box);
     }

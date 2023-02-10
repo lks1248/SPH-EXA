@@ -33,6 +33,7 @@
 
 #include "gtest/gtest.h"
 
+#include "cstone/fields/particles_get.hpp"
 #include "sph/particles_data.hpp"
 
 using namespace sphexa;
@@ -63,10 +64,10 @@ TEST(ParticlesData, releaseAcquire)
     size_t size = 10;
     d.resize(size);
 
-    d.release("du");
+    d.release("ax");
     d.acquire("c");
 
-    EXPECT_EQ(d.du.size(), 0);
+    EXPECT_EQ(d.ax.size(), 0);
     EXPECT_EQ(d.c.size(), size);
 }
 
@@ -95,20 +96,20 @@ TEST(ParticlesData, releaseAcquireMultiple)
 {
     ParticlesData<double, unsigned, cstone::CpuTag> d;
 
-    d.setDependent("du", "ax", "p");
+    d.setDependent("ax", "ay", "p");
 
     size_t size = 10;
     d.resize(size);
 
-    EXPECT_EQ(d.du.size(), size);
     EXPECT_EQ(d.ax.size(), size);
+    EXPECT_EQ(d.ay.size(), size);
     EXPECT_EQ(d.p.size(), size);
 
-    d.release("du", "ax", "p");
+    d.release("ax", "ay", "p");
     d.acquire("c11", "c12", "c13");
 
-    EXPECT_EQ(d.du.size(), 0);
     EXPECT_EQ(d.ax.size(), 0);
+    EXPECT_EQ(d.ay.size(), 0);
     EXPECT_EQ(d.p.size(), 0);
     EXPECT_EQ(d.c11.size(), size);
     EXPECT_EQ(d.c12.size(), size);
@@ -150,4 +151,49 @@ TEST(ParticlesData, typeMismatch)
 
     // cannot acquire "nc" from released "x": types do not match
     EXPECT_ANY_THROW(d.acquire("nc"));
+}
+
+TEST(ParticlesData, get)
+{
+    ParticlesData<double, unsigned, cstone::CpuTag> d;
+
+    constexpr std::array conservedFields{"x", "y", "rho"};
+    std::apply([&d](auto&... f) { d.setConserved(f...); }, conservedFields);
+
+    d.resize(1);
+    d.rho[0] = 1;
+
+    auto acc = get<"x", "y", "rho">(d);
+
+    std::get<2>(acc)[0] = 2;
+    EXPECT_EQ(d.rho[0], 2);
+
+    auto acc2 = get<"x", "y", "rho">(d);
+    EXPECT_EQ(std::get<2>(acc2)[0], 2);
+}
+
+TEST(ParticlesData, getFieldList)
+{
+    ParticlesData<double, unsigned, cstone::CpuTag> d;
+
+    constexpr std::array conservedFields{"x", "y", "rho"};
+    std::apply([&d](auto&... f) { d.setConserved(f...); }, conservedFields);
+
+    d.resize(1);
+    d.rho[0] = 1;
+
+    using Fields = cstone::FieldList<"x", "y", "rho">;
+
+    auto acc = get<Fields>(d);
+
+    std::get<2>(acc)[0] = 2;
+    EXPECT_EQ(d.rho[0], 2);
+
+    auto acc2 = get<Fields>(d);
+    EXPECT_EQ(std::get<2>(acc2)[0], 2);
+
+    constexpr auto tup = make_tuple(Fields{});
+    EXPECT_EQ(d.x.data(), get<std::get<0>(tup)>(d).data());
+    auto& xRef = get<"x">(d);
+    EXPECT_EQ(d.x.data(), xRef.data());
 }

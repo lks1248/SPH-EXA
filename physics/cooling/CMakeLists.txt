@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.17)
 
 project(sphexa-cooling)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
-#find_package(MPI)
-#find_package(OpenMP REQUIRED)
+set(CSTONE_DIR ${CMAKE_SOURCE_DIR}/domain/include)
 
 #include(CTest)
 #include(CheckLanguage)
+add_subdirectory(include/cooling)
 
 if (BUILD_TESTING)
     add_subdirectory(test)

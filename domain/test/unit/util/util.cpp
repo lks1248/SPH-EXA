@@ -1,8 +1,8 @@
 /*
  * MIT License
  *
- * Copyright (c) 2021 CSCS, ETH Zurich
- *               2021 University of Basel
+ * Copyright (c) 2022 CSCS, ETH Zurich
+ *               2022 University of Basel
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -35,12 +35,13 @@
 
 #include "cstone/util/aligned_alloc.hpp"
 #include "cstone/util/noinit_alloc.hpp"
+#include "cstone/util/traits.hpp"
 
 using namespace util;
 
 template<class T>
 using AllocatorType = DefaultInitAdaptor<T, AlignedAllocator<T, 64>>;
-//using AllocatorType = DefaultInitAdaptor<T, std::allocator<T>>;
+// using AllocatorType = DefaultInitAdaptor<T, std::allocator<T>>;
 
 /*! @brief noinit allocation test
  *
@@ -73,6 +74,37 @@ TEST(Utils, AlignedNoInitAlloc)
     EXPECT_EQ(std::count(z.begin(), z.end(), 0.0), z.size());
     EXPECT_EQ(reinterpret_cast<size_t>(z.data()) % 64, 0);
 
-    //std::copy(v.begin(), v.end(), std::ostream_iterator<double>(std::cout, " "));
-    //std::cout << " address: " << v.data() << std::endl;
+    // std::copy(v.begin(), v.end(), std::ostream_iterator<double>(std::cout, " "));
+    // std::cout << " address: " << v.data() << std::endl;
+}
+
+TEST(Utils, round_up)
+{
+    EXPECT_EQ(round_up(127, 128), 128);
+    EXPECT_EQ(round_up(128, 128), 128);
+    EXPECT_EQ(round_up(129, 128), 256);
+    EXPECT_EQ(round_up(257, 128), 384);
+
+    EXPECT_EQ(round_up(127lu, 128lu), 128lu);
+    EXPECT_EQ(round_up(128lu, 128lu), 128lu);
+    EXPECT_EQ(round_up(129lu, 128lu), 256lu);
+}
+
+TEST(Utils, discardLastElement)
+{
+    {
+        auto tup   = std::make_tuple(1, 2, 3);
+        auto probe = discardLastElement(tup);
+        auto ref   = std::make_tuple(1, 2);
+        EXPECT_EQ(probe, ref);
+    }
+    {
+        // test that lvalue reference elements are passed on as lvalue references
+        std::vector<int> v1(10), v2(10);
+
+        auto tup   = std::tie(v1, v2);
+        auto probe = discardLastElement(tup);
+        EXPECT_EQ(probe, std::tie(v1));
+        EXPECT_EQ(std::get<0>(tup).data(), v1.data());
+    }
 }

@@ -32,7 +32,7 @@
 
 #include "conserved_quantities.hpp"
 #include "iobservables.hpp"
-#include "io/ifile_writer.hpp"
+#include "io/file_utils.hpp"
 
 namespace sphexa
 {
@@ -41,6 +41,7 @@ template<class Dataset>
 class TimeAndEnergy : public IObservables<Dataset>
 {
     std::ofstream& constantsFile;
+    using T = typename Dataset::RealType;
 
 public:
     TimeAndEnergy(std::ofstream& constPath)
@@ -48,19 +49,18 @@ public:
     {
     }
 
-    using T = typename Dataset::RealType;
-    void computeAndWrite(Dataset& d, size_t firstIndex, size_t lastIndex, cstone::Box<T>& box)
+    void computeAndWrite(Dataset& simData, size_t firstIndex, size_t lastIndex, cstone::Box<T>& box) override
     {
         int rank;
-        MPI_Comm_rank(d.comm, &rank);
+        MPI_Comm_rank(simData.comm, &rank);
+        auto& d = simData.hydro;
 
-        d.totalNeighbors = neighborsSum(firstIndex, lastIndex, d.neighborsCount);
-        computeConservedQuantities(firstIndex, lastIndex, d);
+        computeConservedQuantities(firstIndex, lastIndex, d, simData.comm);
 
         if (rank == 0)
         {
-            fileutils::writeColumns(
-                constantsFile, ' ', d.iteration, d.ttot, d.minDt, d.etot, d.ecin, d.eint, d.egrav, d.linmom, d.angmom);
+            fileutils::writeColumns(constantsFile, ' ', d.iteration, d.ttot, d.minDt, d.etot, d.ecin, d.eint, d.egrav,
+                                    d.linmom, d.angmom);
         }
     }
 };

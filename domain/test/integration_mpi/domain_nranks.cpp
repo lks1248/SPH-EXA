@@ -45,6 +45,7 @@
 #include "coord_samples/random.hpp"
 #include "cstone/domain/domain.hpp"
 #include "cstone/findneighbors.hpp"
+#include "unit/neighbors/all_to_all.hpp"
 
 using namespace cstone;
 
@@ -108,7 +109,8 @@ void randomGaussianDomain(DomainType domain, int rank, int nRanks, bool equalize
     std::vector<T> h{hGlobal.begin() + firstExtract, hGlobal.begin() + lastExtract};
 
     std::vector<KeyType> keys(x.size());
-    domain.sync(keys, x, y, z, h);
+    std::vector<T> s1, s2, s3;
+    domain.sync(keys, x, y, z, h, std::tuple{}, std::tie(s1, s2, s3));
 
     LocalIndex localCount    = domain.endIndex() - domain.startIndex();
     LocalIndex localCountSum = localCount;
@@ -126,32 +128,21 @@ void randomGaussianDomain(DomainType domain, int rank, int nRanks, bool equalize
     EXPECT_TRUE(std::is_sorted(begin(keysRef), end(keysRef)));
 
     int ngmax = 300;
-    std::vector<int> neighbors(localCount * ngmax);
-    std::vector<int> neighborsCount(localCount);
-    findNeighbors(x.data(), y.data(), z.data(), h.data(), domain.startIndex(), domain.endIndex(), x.size(), box,
-                  sfcKindPointer(keysRef.data()), neighbors.data(), neighborsCount.data(), ngmax);
+    std::vector<cstone::LocalIndex> neighbors(localCount * ngmax);
+    std::vector<unsigned> neighborsCount(localCount);
+    findNeighbors(x.data(), y.data(), z.data(), h.data(), domain.startIndex(), domain.endIndex(), box,
+                  domain.octreeNsViewAcc(), ngmax, neighbors.data(), neighborsCount.data());
 
-    int neighborSum = std::accumulate(begin(neighborsCount), end(neighborsCount), 0);
-    MPI_Allreduce(MPI_IN_PLACE, &neighborSum, 1, MpiType<int>{}, MPI_SUM, MPI_COMM_WORLD);
+    uint64_t neighborSum = std::accumulate(begin(neighborsCount), end(neighborsCount), 0);
+    MPI_Allreduce(MPI_IN_PLACE, &neighborSum, 1, MpiType<uint64_t>{}, MPI_SUM, MPI_COMM_WORLD);
 
     {
         // Note: global coordinates are not yet in Morton order
-        std::vector<KeyType> codesGlobal(numParticles);
-        computeSfcKeys(xGlobal.data(), yGlobal.data(), zGlobal.data(), sfcKindPointer(codesGlobal.data()), numParticles,
-                       box);
-        std::vector<LocalIndex> ordering(numParticles);
-        std::iota(begin(ordering), end(ordering), LocalIndex(0));
-        sort_by_key(begin(codesGlobal), end(codesGlobal), begin(ordering));
-        reorderInPlace(ordering, xGlobal.data());
-        reorderInPlace(ordering, yGlobal.data());
-        reorderInPlace(ordering, zGlobal.data());
-        reorderInPlace(ordering, hGlobal.data());
-
         // calculate reference neighbor sum from the full arrays
-        std::vector<int> neighborsRef(numParticles * ngmax);
-        std::vector<int> neighborsCountRef(numParticles);
-        findNeighbors(xGlobal.data(), yGlobal.data(), zGlobal.data(), hGlobal.data(), 0, numParticles, numParticles,
-                      box, sfcKindPointer(codesGlobal.data()), neighborsRef.data(), neighborsCountRef.data(), ngmax);
+        std::vector<cstone::LocalIndex> neighborsRef(numParticles * ngmax);
+        std::vector<unsigned> neighborsCountRef(numParticles);
+        all2allNeighbors(xGlobal.data(), yGlobal.data(), zGlobal.data(), hGlobal.data(), numParticles,
+                         neighborsRef.data(), neighborsCountRef.data(), ngmax, box);
 
         int neighborSumRef = std::accumulate(begin(neighborsCountRef), end(neighborsCountRef), 0);
         EXPECT_EQ(neighborSum, neighborSumRef);
@@ -198,20 +189,21 @@ TEST(FocusDomain, randomGaussianNeighborSumPbc)
     int bucketSizeFocus = 10;
     float theta         = 0.75;
 
+    auto periodic = BoundaryType::periodic;
     {
-        Domain<unsigned, double> domain(rank, nRanks, bucketSize, bucketSizeFocus, theta, {-1, 1, BoundaryType::periodic});
+        Domain<unsigned, double> domain(rank, nRanks, bucketSize, bucketSizeFocus, theta, {-1, 1, periodic});
         randomGaussianDomain<unsigned, double>(domain, rank, nRanks);
     }
     {
-        Domain<uint64_t, double> domain(rank, nRanks, bucketSize, bucketSizeFocus, theta, {-1, 1, BoundaryType::periodic});
+        Domain<uint64_t, double> domain(rank, nRanks, bucketSize, bucketSizeFocus, theta, {-1, 1, periodic});
         randomGaussianDomain<uint64_t, double>(domain, rank, nRanks);
     }
     {
-        Domain<unsigned, float> domain(rank, nRanks, bucketSize, bucketSizeFocus, theta, {-1, 1, BoundaryType::periodic});
+        Domain<unsigned, float> domain(rank, nRanks, bucketSize, bucketSizeFocus, theta, {-1, 1, periodic});
         randomGaussianDomain<unsigned, float>(domain, rank, nRanks);
     }
     {
-        Domain<uint64_t, float> domain(rank, nRanks, bucketSize, bucketSizeFocus, theta, {-1, 1, BoundaryType::periodic});
+        Domain<uint64_t, float> domain(rank, nRanks, bucketSize, bucketSizeFocus, theta, {-1, 1, periodic});
         randomGaussianDomain<uint64_t, float>(domain, rank, nRanks);
     }
 }
@@ -242,7 +234,8 @@ TEST(FocusDomain, assignmentShift)
 
     std::vector<KeyType> particleKeys(x.size());
 
-    domain.sync(particleKeys, x, y, z, h);
+    std::vector<Real> s1, s2, s3;
+    domain.sync(particleKeys, x, y, z, h, std::tuple{}, std::tie(s1, s2, s3));
 
     if (rank == 2)
     {
@@ -252,7 +245,7 @@ TEST(FocusDomain, assignmentShift)
         }
     }
 
-    domain.sync(particleKeys, x, y, z, h);
+    domain.sync(particleKeys, x, y, z, h, std::tuple{}, std::tie(s1, s2, s3));
 
     std::vector<Real> property(domain.nParticlesWithHalos(), -1);
     for (LocalIndex i = domain.startIndex(); i < domain.endIndex(); ++i)
@@ -260,7 +253,7 @@ TEST(FocusDomain, assignmentShift)
         property[i] = rank;
     }
 
-    domain.exchangeHalos(property);
+    domain.exchangeHalos(std::tie(property), s1, s2);
 
     EXPECT_TRUE(std::count(property.begin(), property.end(), -1) == 0);
     EXPECT_TRUE(std::count(property.begin(), property.end(), rank) == domain.nParticles());
