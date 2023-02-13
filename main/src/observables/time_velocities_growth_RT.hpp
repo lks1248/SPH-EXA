@@ -78,9 +78,9 @@ template<class AuxT> bool operator()(AuxT const &a, AuxT const &b) const { retur
  * with higher radius. Sort function uses greater to sort in reverse order so
  * that we can benefit from resize to cut the vectors down to 50.
  */
-template<class T> util::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
+template<class T, class Tm> util::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
 localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, size_t ngmax, size_t n, const T Atmin, const T Atmax, const T ramp,
-        const T* y, const T* vy, const T* rho, const cstone::LocalIndex* neighbors, const unsigned* neighborsCount)
+        const T* y, const T* vy, const T* kx, const T* xm, const Tm* m, const cstone::LocalIndex* neighbors, const unsigned* neighborsCount)
 {
     std::vector<AuxT<T>> localUp(n);
     std::vector<AuxT<T>> localDown(n);
@@ -88,6 +88,7 @@ localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, size_t ngmax, si
 #pragma omp parallel for
     for (size_t i = startIndex; i < endIndex; i++)
     {
+        T rhoi = kx[i] * m[i] / xm[i];
         T mark_ramp = 0.;
 
         const cstone::LocalIndex* localNeighbors      = neighbors + ngmax * (i - startIndex);
@@ -96,8 +97,9 @@ localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, size_t ngmax, si
         for (unsigned pj = 0; pj < localNeighborsCount; ++pj)
         {
             cstone::LocalIndex j = localNeighbors[pj];
+            T rhoj = kx[j] * m[j] / xm[j];
 
-            T Atwood   = (std::abs(rho[i] - rho[j])) / (rho[i] + rho[j]);
+            T Atwood   = (std::abs(rhoi - rhoj)) / (rhoi + rhoj);
             if (Atwood > Atmax)
             {
                 mark_ramp += T(1);
@@ -138,10 +140,10 @@ template<typename T, class Dataset> util::tuple<T, T>
 computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, MPI_Comm comm, const cstone::Box<T>& box, size_t ngmax)
 {
     //TODO no current GPU implementation! can't transfer neighbour data
-    //transferToHost(d, startIndex, endIndex, {"y", "vy", "rho", "neighbours", "nc"});
+    //transferToHost(d, startIndex, endIndex, {"y", "vy", "rho", /*neighbours*/ "nc"});
 
     auto [localUp, localDown] = localVelocitiesRTGrowthRate(startIndex, endIndex, ngmax, d.x.size(), d.Atmin, d.Atmax, d.ramp,
-            d.y.data(), d.vy.data(), d.rho.data(), d.neighbors.data(), d.nc.data());
+            d.y.data(), d.vy.data(), d.kx.data(), d.xm.data(), d.m.data(), d.neighbors.data(), d.nc.data());
 
     int rootRank = 0;
     int mpiranks;
