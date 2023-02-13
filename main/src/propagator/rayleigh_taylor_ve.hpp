@@ -1,0 +1,95 @@
+/*
+* MIT License
+*
+* Copyright (c) 2021 CSCS, ETH Zurich
+*               2021 University of Basel
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+*/
+
+/*! @file
+* @brief A Propagator class for modern SPH with generalized volume elements
+*
+* @author Sebastian Keller <sebastian.f.keller@gmail.com>
+*/
+
+#pragma once
+
+#include <filesystem>
+#include <sstream>
+#include <variant>
+
+#include "cstone/fields/particles_get.hpp"
+#include "sph/sph.hpp"
+#include "physical_effects/physical_effects.hpp"
+
+#include "ipropagator.hpp"
+#include "ve_hydro.hpp"
+#include "gravity_wrapper.hpp"
+
+namespace sphexa
+{
+
+using namespace sph;
+using cstone::FieldStates;
+
+//! @brief VE hydro propagator that adds turbulence stirring to the acceleration prior to position update
+template<bool avClean, class DomainType, class DataType>
+class RTVeProp final : public HydroVeProp<avClean, DomainType, DataType>
+{
+   using Base = HydroVeProp<avClean, DomainType, DataType>;
+   using Base::ng0_;
+   using Base::ngmax_;
+   using Base::rank_;
+   using Base::timer;
+
+   using RealType = typename DataType::RealType;
+
+
+public:
+   RTVeProp(size_t ngmax, size_t ng0, std::ostream& output, size_t rank)
+       : Base(ngmax, ng0, output, rank)
+   {
+   }
+
+   void step(DomainType& domain, DataType& simData) override
+   {
+       Base::computeForces(domain, simData);
+
+       auto&  d     = simData.hydro;
+       size_t first = domain.startIndex();
+       size_t last  = domain.endIndex();
+
+       computeTimestep(d);
+       timer.step("Timestep");
+
+       artificialGravity(first, last, d.ay.data());
+       timer.step("ArtificialGravity");
+
+       computePositions(first, last, d, domain.box());
+       timer.step("UpdateQuantities");
+       updateSmoothingLength(first, last, d, ng0_);
+       timer.step("UpdateSmoothingLength");
+
+       timer.stop();
+   }
+
+};
+
+} // namespace sphexa

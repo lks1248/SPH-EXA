@@ -131,12 +131,10 @@ public:
         using T       = typename Dataset::RealType;
         auto& d       = simData.hydro;
 
-        if (d.propagator != "custom")
+        if (d.propagator != "RT-ve")
         {
-            throw std::runtime_error(
-                "ERROR: For the Rayleigh Taylor test (--init RT) the SPH propagator has to be 'custom' with a "
-                "call to artificial gravity! Please add the option '--prop custom' in your execution and "
-                "double check the implementation.\n");
+            throw std::runtime_error("ERROR: For the Rayleigh Taylor test (--init RT) the SPH propagator has to be "
+                                     "RT-ve. Please restart with '--prop RT-ve'\n");
         }
 
         T rhoUp = constants_.at("rhoUp");

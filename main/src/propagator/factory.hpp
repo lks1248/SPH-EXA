@@ -38,7 +38,7 @@
 #include "nbody.hpp"
 #include "std_hydro.hpp"
 #include "ve_hydro.hpp"
-#include "custom_propagator.hpp"
+#include "rayleigh_taylor_ve.hpp"
 #ifdef SPH_EXA_HAVE_GRACKLE
 #include "std_hydro_grackle.hpp"
 #endif
@@ -84,13 +84,13 @@ propagatorFactory(const std::string& choice, bool avClean, size_t ngmax, size_t 
         throw std::runtime_error("turbulence propagator only available with HDF5 support enabled");
 #endif
     }
-    else if (choice == "custom")
+    else if (choice == "RT-ve")
     {
         if (avClean)
         {
-            return std::make_unique<CustomProp<true, DomainType, ParticleDataType>>(ngmax, ng0, output, rank);
+            return std::make_unique<RTVeProp<true, DomainType, ParticleDataType>>(ngmax, ng0, output, rank);
         }
-        else { return std::make_unique<CustomProp<false, DomainType, ParticleDataType>>(ngmax, ng0, output, rank); }
+        else { return std::make_unique<RTVeProp<false, DomainType, ParticleDataType>>(ngmax, ng0, output, rank); }
     }
     else { throw std::runtime_error("Unknown propagator choice: " + choice); }
 }

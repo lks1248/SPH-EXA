@@ -108,6 +108,10 @@ int main(int argc, char** argv)
 
     Dataset simData;
     simData.comm = MPI_COMM_WORLD;
+    auto& d = simData.hydro;
+
+    d.ngmax = ngmax;
+    d.propagator = propChoice;
 
     Timer totalTimer(output);
     MPI_Barrier(MPI_COMM_WORLD);
@@ -117,7 +121,6 @@ int main(int argc, char** argv)
     propagator->load(initCond, simData.comm);
     cstone::Box<Real> box = simInit->init(rank, numRanks, problemSize, simData);
 
-    auto& d = simData.hydro;
     transferToDevice(d, 0, d.x.size(), propagator->conservedFields());
     d.setOutputFields(outputFields.empty() ? propagator->conservedFields() : outputFields);
 
