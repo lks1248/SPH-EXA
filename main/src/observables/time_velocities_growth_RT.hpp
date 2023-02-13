@@ -208,12 +208,14 @@ public:
 
     void computeAndWrite(Dataset& simData, size_t firstIndex, size_t lastIndex, cstone::Box<T>& box)
     {
+        int rank;
+        MPI_Comm_rank(simData.comm, &rank);
         auto& d = simData.hydro;
+
+        computeConservedQuantities(firstIndex, lastIndex, d, simData.comm);
 
         auto [vy_max, vy_min] = computeVelocitiesRTGrowthRate<T>(firstIndex, lastIndex, d, simData.comm, box, d.ngmax);
 
-        int rank;
-        MPI_Comm_rank(simData.comm, &rank);
 
         if (rank == 0)
         {
