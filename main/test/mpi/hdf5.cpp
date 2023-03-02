@@ -75,8 +75,8 @@ TEST(HDF5IO, stepAttribute)
         reader.stepAttribute("int8Attr", &int8Attr, 1);
 
         // providing a wrong type should produce a runtime exception, HDF5 does not do conversions for attributes
-        float ttotFloat;
-        EXPECT_THROW(reader.stepAttribute("float64Attr", &ttotFloat, 1), std::runtime_error);
+        int ttotInt;
+        EXPECT_THROW(reader.stepAttribute("float64Attr", &ttotInt, 1), std::runtime_error);
 
         EXPECT_EQ(float64Attr, 0.5);
         EXPECT_EQ(int64Attr, 42);
@@ -161,6 +161,7 @@ TEST(HDF5IO, particleData)
         Dataset data;
         data.iteration = 42;
         data.ttot      = 3.14159;
+        data.ngmax     = 1000;
         H5PartWriter writer(MPI_COMM_WORLD);
         writer.addStep(0, 1, testfile);
         data.loadOrStoreAttributes(&writer);
@@ -173,6 +174,7 @@ TEST(HDF5IO, particleData)
         data.loadOrStoreAttributes(&reader);
         EXPECT_EQ(data.iteration, 42);
         EXPECT_EQ(data.ttot, 3.14159);
+        EXPECT_EQ(data.ngmax, 1000);
         reader.closeStep();
     }
 }

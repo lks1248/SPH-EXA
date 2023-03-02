@@ -32,10 +32,9 @@
 
 #pragma once
 
-#include <vector>
-#include <math.h>
 #include <algorithm>
-
+#include <cmath>
+#include <vector>
 #include <mpi.h>
 
 #include "kernels.hpp"
@@ -43,19 +42,73 @@
 namespace sph
 {
 
+//! @brief limit time-step based on accelerations when gravity is enabled
 template<class Dataset>
-void computeTimestep(Dataset& d)
+auto accelerationTimestep(size_t first, size_t last, const Dataset& d)
 {
     using T = typename Dataset::RealType;
 
-    T minDt = std::min(d.minDt_loc, d.maxDtIncrease * d.minDt);
+    T maxAccSq = 0.0;
+    if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
+    {
+        maxAccSq = cstone::maxNormSquareGpu(rawPtr(d.devData.x) + first, rawPtr(d.devData.y) + first,
+                                            rawPtr(d.devData.z) + first, last - first);
+    }
+    else
+    {
+#pragma omp parallel for reduction(max : maxAccSq)
+        for (size_t i = first; i < last; ++i)
+        {
+            cstone::Vec3<T> X{d.x[i], d.y[i], d.z[i]};
+            maxAccSq = std::max(norm2(X), maxAccSq);
+        }
+    }
 
-    MPI_Allreduce(MPI_IN_PLACE, &minDt, 1, MpiType<T>{}, MPI_MIN, MPI_COMM_WORLD);
+    return d.etaAcc * std::sqrt(d.eps / std::sqrt(maxAccSq));
+}
 
-    d.ttot += minDt;
+//! @brief limit time-step based on divergence of velocity
+template<class Dataset>
+auto rhoTimestep(size_t first, size_t last, const Dataset& d)
+{
+    using T = typename Dataset::RealType;
+
+    T maxDivv = -INFINITY;
+    if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
+    {
+        if (d.devData.divv.empty()) { throw std::runtime_error("Divv needs to be available in rhoTimestep\n"); }
+        auto minmax = cstone::MinMaxGpu<T>{}(rawPtr(d.devData.divv) + first, rawPtr(d.devData.divv) + last);
+        maxDivv     = std::get<1>(minmax);
+    }
+    else
+    {
+        if (d.divv.empty()) { throw std::runtime_error("Divv needs to be available in rhoTimestep\n"); }
+
+#pragma omp parallel for reduction(max : maxDivv)
+        for (size_t i = first; i < last; ++i)
+        {
+            maxDivv = std::max(d.divv[i], maxDivv);
+        }
+    }
+    return d.Krho / std::abs(maxDivv);
+}
+
+template<class Dataset>
+void computeTimestep(size_t first, size_t last, Dataset& d)
+{
+    using T = typename Dataset::RealType;
+
+    T minDtAcc = (d.g != 0.0) ? accelerationTimestep(first, last, d) : INFINITY;
+
+    T minDtLoc = std::min({minDtAcc, d.minDtCourant, d.minDtRho, d.maxDtIncrease * d.minDt});
+
+    T minDtGlobal;
+    MPI_Allreduce(&minDtLoc, &minDtGlobal, 1, MpiType<T>{}, MPI_MIN, MPI_COMM_WORLD);
+
+    d.ttot += minDtGlobal;
 
     d.minDt_m1 = d.minDt;
-    d.minDt    = minDt;
+    d.minDt    = minDtGlobal;
 }
 
 } // namespace sph

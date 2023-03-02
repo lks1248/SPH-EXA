@@ -35,56 +35,59 @@
 #include "cstone/traversal/macs.hpp"
 #include "cstone/focus/source_center.hpp"
 #include "cartesian_qpole.hpp"
+#include "kernel.hpp"
 
 namespace ryoanji
 {
+
+//! @brief compute geometric center and size of the bounding box of particles in the given range
+template<class T, size_t N>
+auto computeCenterAndSize(const util::array<Vec4<T>, N>& target)
+{
+    Vec3<T> tMin = makeVec3(target[0]);
+    Vec3<T> tMax = tMin;
+    for (LocalIndex i = 1; i < N; ++i)
+    {
+        Vec3<T> tp = makeVec3(target[i]);
+        tMin       = min(tp, tMin);
+        tMax       = max(tp, tMax);
+    }
+
+    Vec3<T> center = (tMax + tMin) * T(0.5);
+    Vec3<T> size   = (tMax - tMin) * T(0.5);
+
+    return std::make_tuple(center, size);
+}
 
 /*! @brief computes gravitational acceleration for all particles in the specified group
  *
  * @tparam T1                   float or double
  * @tparam T2                   float or double
- * @param[in]    groupIdx       leaf cell index in [0:octree.numLeafNodes()] to compute accelerations for
+ * @param[in]    target         (x,y,z,h) of N target particles
  * @param[in]    childOffsets   child node index of each node
  * @param[in]    internalToLeaf map to convert an octree node index into a cstone leaf index
+ * @param[in]    centers        (x,y,z,mac^2) expansion center for each tree cell
  * @param[in]    multipoles     array of length @p octree.numTreeNodes() with the multipole moments for all nodes
  * @param[in]    layout         array of length @p octree.numLeafNodes()+1, layout[i] is the start offset
  *                              into the x,y,z,m arrays for the leaf node with index i. The last element
  *                              is equal to the length of the x,y,z,m arrays.
- * @param[in]    x              x-coordinates
+ * @param[in]    x              x-coordinates (sources)
  * @param[in]    y              y-coordinates
  * @param[in]    z              z-coordinates
  * @param[in]    h              smoothing lengths
  * @param[in]    m              masses
- * @param[in]    box            global coordinate bounding box
- * @param[in]    theta          accuracy parameter
- * @param[in]    G              gravitational constant
- * @param[inout] ax             location to add x-acceleration to
- * @param[inout] ay             location to add y-acceleration to
- * @param[inout] az             location to add z-acceleration to
- * @param[inout] ugrav          location to add gravitational potential to
+ * @param[inout] acc            acceleration and potential of N target particles to add to
  *
  * Note: acceleration output is added to destination
  */
-template<class MType, class T1, class T2, class Tm>
-void computeGravityGroup(TreeNodeIndex groupIdx, const TreeNodeIndex* childOffsets, const TreeNodeIndex* internalToLeaf,
-                         const cstone::SourceCenterType<T1>* centers, MType* multipoles, const LocalIndex* layout,
-                         const T1* x, const T1* y, const T1* z, const T2* h, const Tm* m, float G, T1* ax, T1* ay,
-                         T1* az, T1* ugrav)
+template<class MType, class T1, class T2, class Tm, size_t N>
+void computeGravityGroup(const util::array<Vec4<T1>, N>& target, const TreeNodeIndex* childOffsets,
+                         const TreeNodeIndex* internalToLeaf, const cstone::SourceCenterType<T1>* centers,
+                         MType* multipoles, const LocalIndex* layout, const T1* x, const T1* y, const T1* z,
+                         const T2* h, const Tm* m, Vec4<T1>* acc)
 {
-    LocalIndex firstTarget = layout[groupIdx];
-    LocalIndex lastTarget  = layout[groupIdx + 1];
-
-    Vec3<T1> tMin{x[firstTarget], y[firstTarget], z[firstTarget]};
-    Vec3<T1> tMax = tMin;
-    for (LocalIndex i = firstTarget; i < lastTarget; ++i)
-    {
-        Vec3<T1> tp{x[i], y[i], z[i]};
-        tMin = min(tp, tMin);
-        tMax = max(tp, tMax);
-    }
-
-    Vec3<T1> targetCenter = (tMax + tMin) * T2(0.5);
-    Vec3<T1> targetSize   = (tMax - tMin) * T2(0.5);
+    Vec3<T1> targetCenter, targetSize;
+    std::tie(targetCenter, targetSize) = computeCenterAndSize(target);
 
     /*! @brief octree traversal continuation criterion
      *
@@ -93,30 +96,22 @@ void computeGravityGroup(TreeNodeIndex groupIdx, const TreeNodeIndex* childOffse
      * the traversal routine to keep going. If the MAC passed, the multipole moments are applied
      * to the particles in the target box and traversal is stopped.
      */
-    auto descendOrM2P = [firstTarget, lastTarget, centers, multipoles, x, y, z, G, ax, ay, az, ugrav, &targetCenter,
-                         &targetSize](TreeNodeIndex idx)
+    auto descendOrM2P = [centers, multipoles, &target, &targetCenter, &targetSize, acc](TreeNodeIndex idx)
     {
         const auto& com = centers[idx];
-        const auto& p   = multipoles[idx];
+        const auto& mp  = multipoles[idx];
 
         bool violatesMac = cstone::evaluateMac(makeVec3(com), com[3], targetCenter, targetSize);
 
         if (!violatesMac)
         {
-            LocalIndex numTargets = lastTarget - firstTarget;
-
 // apply multipole to all particles in group
 #if defined(__llvm__) || defined(__clang__)
 #pragma clang loop vectorize(enable)
 #endif
-            for (LocalIndex t = 0; t < numTargets; ++t)
+            for (LocalIndex k = 0; k < N; ++k)
             {
-                LocalIndex offset        = t + firstTarget;
-                auto [ax_, ay_, az_, u_] = multipole2Particle(x[offset], y[offset], z[offset], makeVec3(com), p);
-                *(ax + t) += G * ax_;
-                *(ay + t) += G * ay_;
-                *(az + t) += G * az_;
-                *(ugrav + t) += G * u_;
+                acc[k] = M2P(acc[k], makeVec3(target[k]), makeVec3(com), mp);
             }
         }
 
@@ -129,50 +124,19 @@ void computeGravityGroup(TreeNodeIndex groupIdx, const TreeNodeIndex* childOffse
      * and the leaf failed the MAC w.r.t to the target box. In that case, direct particle-particle
      * interactions need to be computed.
      */
-    auto leafP2P = [groupIdx, internalToLeaf, layout, firstTarget, lastTarget, x, y, z, h, m, G, ax, ay, az,
-                    ugrav](TreeNodeIndex idx)
+    auto leafP2P = [internalToLeaf, layout, &target, x, y, z, h, m, acc](TreeNodeIndex idx)
     {
-        TreeNodeIndex lidx       = internalToLeaf[idx];
-        LocalIndex    numTargets = lastTarget - firstTarget;
+        TreeNodeIndex lidx        = internalToLeaf[idx];
+        LocalIndex    firstSource = layout[lidx];
+        LocalIndex    lastSource  = layout[lidx + 1];
 
-        LocalIndex firstSource = layout[lidx];
-        LocalIndex lastSource  = layout[lidx + 1];
-        LocalIndex numSources  = lastSource - firstSource;
-
-        if (groupIdx != lidx)
+        // loop over targets in group
+        for (LocalIndex k = 0; k < N; ++k)
         {
-            // source node != target node
-            for (LocalIndex t = 0; t < numTargets; ++t)
+            // loop over sources in cell
+            for (LocalIndex s = firstSource; s < lastSource; ++s)
             {
-                LocalIndex offset = t + firstTarget;
-                auto [ax_, ay_, az_, u_] =
-                    particle2Particle(x[offset], y[offset], z[offset], h[offset], x + firstSource, y + firstSource,
-                                      z + firstSource, h + firstSource, m + firstSource, numSources);
-                *(ax + t) += G * ax_;
-                *(ay + t) += G * ay_;
-                *(az + t) += G * az_;
-                *(ugrav + t) += G * u_;
-            }
-        }
-        else
-        {
-            assert(firstTarget == firstSource);
-            // source node == target node -> source contains target, avoid self gravity
-            for (LocalIndex t = 0; t < numTargets; ++t)
-            {
-                LocalIndex offset = t + firstTarget;
-                // 2 splits: [firstSource:t] and [t+1:lastSource]
-                auto [ax_, ay_, az_, u_] =
-                    particle2Particle(x[offset], y[offset], z[offset], h[offset], x + firstSource, y + firstSource,
-                                      z + firstSource, h + firstSource, m + firstSource, offset - firstSource);
-
-                LocalIndex tp1               = offset + 1;
-                auto [ax2_, ay2_, az2_, u2_] = particle2Particle(x[offset], y[offset], z[offset], h[offset], x + tp1,
-                                                                 y + tp1, z + tp1, h + tp1, m + tp1, lastSource - tp1);
-                *(ax + t) += G * (ax_ + ax2_);
-                *(ay + t) += G * (ay_ + ay2_);
-                *(az + t) += G * (az_ + az2_);
-                *(ugrav + t) += G * (u_ + u2_);
+                acc[k] = P2P(acc[k], makeVec3(target[k]), Vec3<T1>{x[s], y[s], z[s]}, m[s], target[k][3], h[s]);
             }
         }
     };
@@ -180,32 +144,14 @@ void computeGravityGroup(TreeNodeIndex groupIdx, const TreeNodeIndex* childOffse
     cstone::singleTraversal(childOffsets, descendOrM2P, leafP2P);
 }
 
-//! @brief repeats computeGravityGroup for all leaf node indices specified
-template<class KeyType, class MType, class T1, class T2, class Tm>
-void computeGravity(const TreeNodeIndex* childOffsets, const TreeNodeIndex* internalToLeaf,
-                    const cstone::SourceCenterType<T1>* centers, MType* multipoles, const LocalIndex* layout,
-                    TreeNodeIndex firstLeafIndex, TreeNodeIndex lastLeafIndex, const T1* x, const T1* y, const T1* z,
-                    const T2* h, const Tm* m, float G, T1* ax, T1* ay, T1* az, T1* ugrav)
-{
-#pragma omp parallel for
-    for (TreeNodeIndex leafIdx = firstLeafIndex; leafIdx < lastLeafIndex; ++leafIdx)
-    {
-        LocalIndex firstTarget = layout[leafIdx];
-        computeGravityGroup(leafIdx, childOffsets, internalToLeaf, centers, multipoles, layout, x, y, z, h, m, G,
-                            ax + firstTarget, ay + firstTarget, az + firstTarget, ugrav + firstTarget);
-    }
-}
-
 /*! @brief repeats computeGravityGroup for all leaf node indices specified
  *
  * only computes total gravitational energy, no potential per particle
  *
- * @tparam KeyType               unsigned 32- or 64-bit integer type
- * @tparam T1                    float or double
- * @tparam T2                    float or double
+ * @tparam       MType           Multipole type including expansion order, e.g. spherical or cartesian
  * @param[in]    childOffsets    child node index of each node
  * @param[in]    internalToLeaf  map to convert an octree node index into a cstone leaf index
- * @param[in]    numLeafNodes    number of leaf nodes
+ * @param[in]    macSpheres      (x,y,z,mac^2) expansion center for each tree cell
  * @param[in]    multipoles      array of length @p octree.numTreeNodes() with the multipole moments for all nodes
  * @param[in]    layout          array of length @p octree.numLeafNodes()+1, layout[i] is the start offset
  *                               into the x,y,z,m arrays for the leaf node with index i. The last element
@@ -217,54 +163,69 @@ void computeGravity(const TreeNodeIndex* childOffsets, const TreeNodeIndex* inte
  * @param[in]    z               z-coordinates
  * @param[in]    h               smoothing lengths
  * @param[in]    m               masses
+ * @param[in]    box             global coordinate bounding box
  * @param[in]    G               gravitational constant
- * @param[inout] ax              location to add x-acceleration to
- * @param[inout] ay              location to add y-acceleration to
- * @param[inout] az              location to add z-acceleration to
- * @return                       total gravitational energy
+ * @param[inout] ax              location to add x-acceleration to, per particle
+ * @param[inout] ay              location to add y-acceleration to, per particle
+ * @param[inout] az              location to add z-acceleration to, per particle
+ * @param[inout] egravTot        total gravitational potential, one element
+ * @param[in]    numShells       number of periodic images to include per dimension
  */
 template<class MType, class T1, class T2, class Tm>
-T2 computeGravity(const TreeNodeIndex* childOffsets, const TreeNodeIndex* internalToLeaf, TreeNodeIndex numLeafNodes,
-                  const cstone::SourceCenterType<T1>* centers, MType* multipoles, const LocalIndex* layout,
-                  TreeNodeIndex firstLeafIndex, TreeNodeIndex lastLeafIndex, const T1* x, const T1* y, const T1* z,
-                  const T2* h, const Tm* m, float G, T1* ax, T1* ay, T1* az)
+void computeGravity(const TreeNodeIndex* childOffsets, const TreeNodeIndex* internalToLeaf,
+                    const cstone::SourceCenterType<T1>* macSpheres, const MType* multipoles, const LocalIndex* layout,
+                    TreeNodeIndex firstLeafIndex, TreeNodeIndex lastLeafIndex, const T1* x, const T1* y, const T1* z,
+                    const T2* h, const Tm* m, const cstone::Box<T1>& box, float G, T1* ax, T1* ay, T1* az, T1* egravTot,
+                    int numShells = 0)
 {
-    T1 egravTot = 0.0;
+    constexpr LocalIndex groupSize   = 16;
+    LocalIndex           firstTarget = layout[firstLeafIndex];
+    LocalIndex           lastTarget  = layout[lastLeafIndex];
 
-    // determine maximum leaf particle count, bucketSize does not work, since octree might not be converged
-    std::size_t maxNodeCount = 0;
-#pragma omp parallel for reduction(max : maxNodeCount)
-    for (TreeNodeIndex i = 0; i < numLeafNodes; ++i)
+    T1 egravLoc = 0.0;
+
+#pragma omp parallel for reduction(+ : egravLoc)
+    for (LocalIndex i = firstTarget; i < lastTarget; i += groupSize)
     {
-        maxNodeCount = std::max(maxNodeCount, std::size_t(layout[i + 1] - layout[i]));
-    }
+        util::array<Vec4<T1>, groupSize> targets, potAndAcc;
 
-#pragma omp parallel
-    {
-        T1 ugravThread[maxNodeCount];
-        T1 egravThread = 0.0;
-
-#pragma omp for
-        for (TreeNodeIndex leafIdx = firstLeafIndex; leafIdx < lastLeafIndex; ++leafIdx)
+        LocalIndex groupSizeValid = std::min(groupSize, lastTarget - i);
+        for (LocalIndex k = 0; k < groupSizeValid; ++k)
         {
-            LocalIndex firstTarget = layout[leafIdx];
-            LocalIndex numTargets  = layout[leafIdx + 1] - firstTarget;
+            targets[k]   = {x[i + k], y[i + k], z[i + k], T1(h[i + k])};
+            potAndAcc[k] = {0, 0, 0, 0};
+        }
 
-            std::fill(ugravThread, ugravThread + maxNodeCount, 0);
-            computeGravityGroup(leafIdx, childOffsets, internalToLeaf, centers, multipoles, layout, x, y, z, h, m, G,
-                                ax + firstTarget, ay + firstTarget, az + firstTarget, ugravThread);
-
-            for (LocalIndex i = 0; i < numTargets; ++i)
+        for (int iz = -numShells; iz <= numShells; ++iz)
+        {
+            for (int iy = -numShells; iy <= numShells; ++iy)
             {
-                egravThread += m[i + firstTarget] * ugravThread[i];
+                for (int ix = -numShells; ix <= numShells; ++ix)
+                {
+                    Vec4<T1> pbcShift{ix * box.lx(), iy * box.ly(), iz * box.lz(), 0};
+
+                    auto targetsShifted = targets;
+                    for (auto& t_ : targetsShifted)
+                    {
+                        t_ -= pbcShift;
+                    }
+
+                    computeGravityGroup(targetsShifted, childOffsets, internalToLeaf, macSpheres, multipoles, layout, x,
+                                        y, z, h, m, potAndAcc.data());
+                }
             }
         }
 
-#pragma omp atomic
-        egravTot += egravThread;
+        for (LocalIndex k = 0; k < groupSizeValid; ++k)
+        {
+            egravLoc += G * m[i + k] * potAndAcc[k][0];
+            ax[i + k] += G * potAndAcc[k][1];
+            ay[i + k] += G * potAndAcc[k][2];
+            az[i + k] += G * potAndAcc[k][3];
+        }
     }
 
-    return 0.5 * egravTot;
+    *egravTot += 0.5 * egravLoc;
 }
 
 //! @brief compute direct gravity sum for all particles [0:numParticles]
@@ -275,17 +236,22 @@ void directSum(const T1* x, const T1* y, const T1* z, const T2* h, const Tm* m, 
 #pragma omp parallel for schedule(static)
     for (LocalIndex t = 0; t < numParticles; ++t)
     {
-        // 2 splits: [0:t] and [t+1:numParticles]
-        auto [ax_, ay_, az_, u_] = particle2Particle(x[t], y[t], z[t], h[t], x, y, z, h, m, t);
+        Vec4<T1> acc{0, 0, 0, 0};
+        Vec3<T1> target{x[t], y[t], z[t]};
+        T1       target_h = h[t];
 
-        LocalIndex tp1 = t + 1;
-        auto [ax2_, ay2_, az2_, u2_] =
-            particle2Particle(x[t], y[t], z[t], h[t], x + tp1, y + tp1, z + tp1, h + tp1, m + tp1, numParticles - tp1);
+#if defined(__llvm__) || defined(__clang__)
+#pragma clang loop vectorize(enable)
+#endif
+        for (LocalIndex s = 0; s < numParticles; ++s)
+        {
+            acc = P2P(acc, target, Vec3<T1>{x[s], y[s], z[s]}, m[s], target_h, h[s]);
+        }
 
-        *(ax + t) += G * (ax_ + ax2_);
-        *(ay + t) += G * (ay_ + ay2_);
-        *(az + t) += G * (az_ + az2_);
-        *(ugrav + t) += G * m[t] * (u_ + u2_);
+        *(ugrav + t) += G * m[t] * acc[0];
+        *(ax + t) += G * acc[1];
+        *(ay + t) += G * acc[2];
+        *(az + t) += G * acc[3];
     }
 }
 

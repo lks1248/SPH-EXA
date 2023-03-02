@@ -35,6 +35,8 @@
 
 #include "cstone/fields/particles_get.hpp"
 #include "sph/particles_data.hpp"
+#include "sph/positions.hpp"
+#include "sph/timestep.hpp"
 
 #include "ipropagator.hpp"
 #include "gravity_wrapper.hpp"
@@ -49,8 +51,6 @@ template<class DomainType, class DataType>
 class NbodyProp final : public Propagator<DomainType, DataType>
 {
     using Base = Propagator<DomainType, DataType>;
-    using Base::ng0_;
-    using Base::ngmax_;
     using Base::timer;
 
     using T             = typename DataType::RealType;
@@ -68,14 +68,14 @@ class NbodyProp final : public Propagator<DomainType, DataType>
      *
      * x, y, z, h and m are automatically considered conserved and must not be specified in this list
      */
-    using ConservedFields = FieldList<>;
+    using ConservedFields = FieldList<"vx", "vy", "vz", "x_m1", "y_m1", "z_m1">;
 
     //! @brief the list of dependent particle fields, these may be used as scratch space during domain sync
-    using DependentFields = FieldList<"ax", "ay", "du", "az">;
+    using DependentFields = FieldList<"ax", "ay", "du_m1", "az">;
 
 public:
-    NbodyProp(size_t ngmax, size_t ng0, std::ostream& output, size_t rank)
-        : Base(ngmax, ng0, output, rank)
+    NbodyProp(std::ostream& output, size_t rank)
+        : Base(output, rank)
     {
     }
 
@@ -89,9 +89,6 @@ public:
     void activateFields(DataType& simData) override
     {
         auto& d = simData.hydro;
-
-        //! grav constant override
-        d.g = 1.0;
 
         //! @brief Fields accessed in domain sync are not part of extensible lists.
         d.setConserved("x", "y", "z", "h", "m");
@@ -132,28 +129,26 @@ public:
         fill(get<"az">(d), first, last, T(0));
 
         mHolder_.upsweep(d, domain);
-        MPI_Barrier(MPI_COMM_WORLD);
         timer.step("Upsweep");
         mHolder_.traverse(d, domain);
-
-        double globalEnergy = 0;
-        int    rootRank     = 0;
-        MPI_Reduce(&d.egrav, &globalEnergy, 1, MpiType<double>{}, MPI_SUM, rootRank, MPI_COMM_WORLD);
-        d.egrav = globalEnergy;
 
         timer.step("Gravity");
 
         auto stats = mHolder_.readStats();
 
-        uint64_t maxP2Pglobal;
-        MPI_Reduce(&stats[1], &maxP2Pglobal, 1, MpiType<uint64_t>{}, MPI_MAX, rootRank, MPI_COMM_WORLD);
-
-        if (domain.startIndex() == 0)
+        if (domain.startIndex() == 0 && cstone::HaveGpu<typename DataType::AcceleratorType>{})
         {
             size_t n = last - first;
             std::cout << "numP2P " << stats[0] / n << " maxP2P " << stats[1] << " numM2P " << stats[2] / n << " maxM2P "
-                      << stats[3] << " maxP2Pglobal " << maxP2Pglobal << std::endl;
+                      << stats[3] << std::endl;
         }
+
+        d.minDtCourant = INFINITY;
+        computeTimestep(first, last, d);
+        computePositions(first, last, d, domain.box());
+        timer.step("UpdateQuantities");
+
+        timer.step("Timestep");
 
         timer.stop();
     }

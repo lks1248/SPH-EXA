@@ -83,16 +83,31 @@ public:
     size_t ngmax;
     std::string propagator{""};
 
+    //! @brief mean desired number of neighbors per particle
+    unsigned ng0{100};
+
+    //! @brief maximum number of neighbors per particle before additional h-adjustment will be triggered
+    unsigned ngmax{150};
+
     T ttot{0.0}, etot{0.0}, ecin{0.0}, eint{0.0}, egrav{0.0};
     T linmom{0.0}, angmom{0.0};
 
     //! current and previous (global) time-steps
     T minDt, minDt_m1;
-    //! temporary MPI rank local timestep;
-    T minDt_loc;
+
+    //! temporary MPI rank local timesteps;
+    T minDtCourant{INFINITY}, minDtRho{INFINITY};
+    //! @brief Fraction of Courant condition for timestep
+    T Kcour{0.2};
+    //! @brief Fraction of 1/|divv| condition for timestep
+    T Krho{0.06};
 
     //! @brief gravitational constant
     T g{0.0};
+    //! @brief gravitational smoothing
+    T eps{0.005};
+    //! @brief acceleration based time-step control
+    T etaAcc{0.2};
 
     //! @brief adiabatic index
     T gamma{5.0 / 3.0};
@@ -100,21 +115,37 @@ public:
     //! @brief mean molecular weight of ions for models that use one value for all particles
     T muiConst{10.0};
 
-    //! @brief Fraction of Courant condition for timestep
-    T Kcour{0.2};
-
     template<class Archive>
     void loadOrStoreAttributes(Archive* ar)
     {
+        //! @brief load or store an attribute, skips non-existing attributes on load.
+        auto optionalIO = [ar](const std::string& attribute, auto* location, size_t attrSize)
+        {
+            try
+            {
+                ar->stepAttribute(attribute, location, attrSize);
+            }
+            catch (std::out_of_range&)
+            {
+                std::cout << "Attribute " << attribute << " not set in file, setting to default value " << *location
+                          << std::endl;
+            }
+        };
+
         ar->stepAttribute("iteration", &iteration, 1);
         ar->stepAttribute("numParticlesGlobal", &numParticlesGlobal, 1);
+        optionalIO("ng0", &ng0, 1);
+        optionalIO("ngmax", &ngmax, 1);
         ar->stepAttribute("time", &ttot, 1);
         ar->stepAttribute("minDt", &minDt, 1);
         ar->stepAttribute("minDt_m1", &minDt_m1, 1);
+        optionalIO("Kcour", &Kcour, 1);
+        optionalIO("Krho", &Krho, 1);
         ar->stepAttribute("gravConstant", &g, 1);
-        ar->stepAttribute("gamma", &gamma, 1);
-        ar->stepAttribute("muiConst", &muiConst, 1);
-        ar->stepAttribute("Kcour", &Kcour, 1);
+        optionalIO("gamma", &gamma, 1);
+        optionalIO("eps", &eps, 1);
+        optionalIO("etaAcc", &etaAcc, 1);
+        optionalIO("muiConst", &muiConst, 1);
     }
 
     /*! @brief Particle fields

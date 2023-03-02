@@ -54,8 +54,6 @@ template<bool avClean, class DomainType, class DataType>
 class TurbVeProp final : public HydroVeProp<avClean, DomainType, DataType>
 {
     using Base = HydroVeProp<avClean, DomainType, DataType>;
-    using Base::ng0_;
-    using Base::ngmax_;
     using Base::rank_;
     using Base::timer;
 
@@ -64,8 +62,8 @@ class TurbVeProp final : public HydroVeProp<avClean, DomainType, DataType>
     sph::TurbulenceData<RealType, typename DataType::AcceleratorType> turbulenceData;
 
 public:
-    TurbVeProp(size_t ngmax, size_t ng0, std::ostream& output, size_t rank)
-        : Base(ngmax, ng0, output, rank)
+    TurbVeProp(std::ostream& output, size_t rank)
+        : Base(output, rank)
         , turbulenceData(TurbulenceConstants(), rank == 0)
     {
     }
@@ -78,14 +76,14 @@ public:
         size_t first = domain.startIndex();
         size_t last  = domain.endIndex();
 
-        computeTimestep(d);
+        computeTimestep(first, last, d);
         timer.step("Timestep");
         driveTurbulence(first, last, d, turbulenceData);
         timer.step("Turbulence Stirring");
 
         computePositions(first, last, d, domain.box());
         timer.step("UpdateQuantities");
-        updateSmoothingLength(first, last, d, ng0_);
+        updateSmoothingLength(first, last, d);
         timer.step("UpdateSmoothingLength");
 
         timer.stop();
