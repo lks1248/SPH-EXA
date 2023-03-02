@@ -107,7 +107,6 @@ int main(int argc, char** argv)
     simData.comm = MPI_COMM_WORLD;
     auto& d = simData.hydro;
 
-    d.ngmax = ngmax;
     d.propagator = propChoice;
 
     Timer totalTimer(output);

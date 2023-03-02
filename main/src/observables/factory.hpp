@@ -50,10 +50,6 @@ namespace sphexa
 //! @brief reads a specified attribute if exists and has the specified type
 template<class AttrType>
 void findH5Attribute(const std::string& fname, const std::string& attributeToRead, AttrType* attribute,
-                     h5part_int64_t h5Type)
-//! @brief reads a specified attribute if exists and has the specified type
-template<class AttrType>
-void findH5Attribute(const std::string& fname, const std::string& attributeToRead, AttrType* attribute,
                            h5part_int64_t h5Type)
 {
 
@@ -103,11 +99,6 @@ std::unique_ptr<IObservables<Dataset>> observablesFactory(const std::string& tes
 #ifdef SPH_EXA_HAVE_H5PART
 
     std::string    khGrowthRate = "KelvinHelmholtzGrowthRate";
-    h5part_int64_t khAttribute;
-    findH5Attribute<h5part_int64_t>(testCase, khGrowthRate, &khAttribute, H5PART_INT64);
-    if (khAttribute != 0 || testCase == "kelvin-helmholtz")
-
-    std::string    khGrowthRate = "KelvinHelmholtzGrowthRate";
     h5part_int64_t khAttribute = 0;
     findH5Attribute<h5part_int64_t>(testCase, khGrowthRate, &khAttribute, H5PART_INT64);
     if (khAttribute != 0 || testCase == "kelvin-helmholtz")
@@ -115,10 +106,6 @@ std::unique_ptr<IObservables<Dataset>> observablesFactory(const std::string& tes
         return std::make_unique<TimeEnergyGrowth<Dataset>>(constantsFile);
     }
 
-    std::string gravWaves = "observeGravWaves";
-    double      gravWaveAttribute[3];
-    findH5Attribute<h5part_float64_t>(testCase, gravWaves, gravWaveAttribute, H5PART_FLOAT64);
-    if (gravWaveAttribute[0] != 0.0)
     std::string gravWaves = "observeGravWaves";
     double      gravWaveAttribute[3] = {0.0};
     findH5Attribute<h5part_float64_t>(testCase, gravWaves, gravWaveAttribute, H5PART_FLOAT64);

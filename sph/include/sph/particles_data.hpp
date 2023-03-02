@@ -80,7 +80,6 @@ public:
     size_t iteration{1};
     size_t numParticlesGlobal;
     size_t totalNeighbors;
-    size_t ngmax;
     std::string propagator{""};
 
     //! @brief mean desired number of neighbors per particle

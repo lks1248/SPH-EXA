@@ -79,9 +79,9 @@ std::unique_ptr<Propagator<DomainType, ParticleDataType>> propagatorFactory(cons
     {
         if (avClean)
         {
-            return std::make_unique<RTVeProp<true, DomainType, ParticleDataType>>(ngmax, ng0, output, rank);
+            return std::make_unique<RTVeProp<true, DomainType, ParticleDataType>>(output, rank);
         }
-        else { return std::make_unique<RTVeProp<false, DomainType, ParticleDataType>>(ngmax, ng0, output, rank); }
+        else { return std::make_unique<RTVeProp<false, DomainType, ParticleDataType>>(output, rank); }
     }
     else { throw std::runtime_error("Unknown propagator choice: " + choice); }
 }

@@ -144,9 +144,9 @@ public:
         T ySize     = constants_.at("ySize");
         T zSize     = constants_.at("zSize");
 
-        size_t xBlocks = xSize / blockSize;
-        size_t yBlocks = ySize / blockSize;
-        size_t zBlocks = zSize / blockSize;
+        int xBlocks = xSize / blockSize;
+        int yBlocks = ySize / blockSize;
+        int zBlocks = zSize / blockSize;
 
         size_t nBlocks    = xBlocks * yBlocks * zBlocks;
         size_t halfBlocks = nBlocks / 2;
@@ -162,18 +162,18 @@ public:
         KeyType  keyStart          = initialBoundaries[rank];
         KeyType  keyEnd            = initialBoundaries[rank + 1];
 
-        auto [xHalf, yHalf, zHalf] = makeLessDenseTemplate<T, Dataset>(2, xBlock, yBlock, zBlock, xBlock.size());
+        auto [xHalf, yHalf, zHalf] = makeLessDenseTemplate<T>(2, xBlock, yBlock, zBlock);
 
-        size_t                    multi1D      = std::rint(cbrtNumPart / std::cbrt(xBlock.size()));
-        std::tuple<int, int, int> multiplicity = {xBlocks * multi1D, yBlocks / 2 * multi1D, multi1D};
+        int                   multi1D      = std::rint(cbrtNumPart / std::cbrt(xBlock.size()));
+        cstone::Vec3<int> multiplicity = {xBlocks * multi1D, yBlocks / 2 * multi1D, multi1D};
 
         cstone::Box<T> layer1(0, xSize, 0, ySize / 2., 0, zSize, cstone::BoundaryType::periodic,
                               cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
         cstone::Box<T> layer2(0, xSize, ySize / 2., ySize, 0, zSize, cstone::BoundaryType::periodic,
                               cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
 
-        assembleRectangle<T>(keyStart, keyEnd, layer1, multiplicity, xHalf, yHalf, zHalf, d.x, d.y, d.z);
-        assembleRectangle<T>(keyStart, keyEnd, layer2, multiplicity, xBlock, yBlock, zBlock, d.x, d.y, d.z);
+        assembleCuboid<T>(keyStart, keyEnd, layer1, multiplicity, xHalf, yHalf, zHalf, d.x, d.y, d.z);
+        assembleCuboid<T>(keyStart, keyEnd, layer2, multiplicity, xBlock, yBlock, zBlock, d.x, d.y, d.z);
 
         size_t npartUp  = halfBlocks * xBlock.size();
         T      volumeHD = xSize * constants_.at("y0") * zSize; // (x_size * y_size * z_size) in the high-density zone

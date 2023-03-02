@@ -35,6 +35,8 @@
 #include "cstone/primitives/gather.hpp"
 #include "cstone/sfc/sfc.hpp"
 
+#pragma once
+
 namespace sphexa
 {
 
@@ -88,6 +90,33 @@ auto makeLessDenseTemplate(size_t n, const std::vector<T>& x, const std::vector<
 {
     assert(x.size() == y.size() == z.size());
     return std::make_tuple(skipElements(n, x), skipElements(n, y), skipElements(n, z));
+}
+
+/*!@brief apply fixed boundary conditions to one axis
+ *
+ * @tparam T    field type
+ * @param pos   position data of axis to be applied
+ * @param axisMax max coordinate of the box in the axis of pos
+ * @param axisMin min coordinate of the box in the axis of pos
+ * @param size  number of particles
+ */
+template<class T>
+void applyFixedBoundaries(T* pos, T* vx, T* vy, T* vz, T* h, T axisMax, T axisMin, size_t size)
+{
+
+#pragma omp parallel for
+    for (size_t i = 0; i < size; i++)
+    {
+        T distMax = std::abs(axisMax - pos[i]);
+        T distMin = std::abs(axisMin - pos[i]);
+
+        if (distMax < 2.0 * h[i] || distMin < 2.0 * h[i])
+        {
+            vx[i] = 0.0;
+            vy[i] = 0.0;
+            vz[i] = 0.0;
+        }
+    }
 }
 
 } // namespace sphexa
