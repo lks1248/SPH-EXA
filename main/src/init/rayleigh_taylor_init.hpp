@@ -165,7 +165,7 @@ public:
 
         auto [xHalf, yHalf, zHalf] = makeLessDenseTemplate<T>(2, xBlock, yBlock, zBlock);
 
-        int                   multi1D      = std::rint(cbrtNumPart / std::cbrt(xBlock.size()));
+        int               multi1D      = std::rint(cbrtNumPart / std::cbrt(xBlock.size()));
         cstone::Vec3<int> multiplicity = {xBlocks * multi1D, yBlocks / 2 * multi1D, multi1D};
 
         cstone::Box<T> layer1(0, xSize, 0, ySize / 2., 0, zSize, cstone::BoundaryType::periodic,

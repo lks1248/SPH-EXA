@@ -112,6 +112,9 @@ public:
     //! @brief mean molecular weight of ions for models that use one value for all particles
     T muiConst{10.0};
 
+    //! @brief stores the propagator choice, to check correct initialization of certain test cases
+    std::string propagator;
+
     //! @brief Unified interface to attribute initialization, reading and writing
     template<class Archive>
     void loadOrStoreAttributes(Archive* ar)
