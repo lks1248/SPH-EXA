@@ -56,6 +56,7 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     T gamma         = constants.at("gamma");
     T p0            = constants.at("p0");
     T y0            = constants.at("y0");
+    T g             = 0.5;
 
     size_t ng0   = 100;
     T      hUp   = 0.5 * std::cbrt(3. * ng0 * massPart / 4. / M_PI / rhoUp);
@@ -82,7 +83,7 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
 
         if (d.y[i] < y0)
         {
-            T p = p0 + rhoDown * (y0 - d.y[i]);
+            T p = p0 + rhoDown * (y0 - d.y[i]) * g;
             T u = p / (rhoDown * (gamma - 1.));
 
             d.h[i]    = hDown;
@@ -90,7 +91,7 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
         }
         else
         {
-            T p = p0 + rhoUp * (y0 - d.y[i]);
+            T p = p0 - rhoUp * (d.y[i] - y0) * g;
             T u = p / (rhoUp * (gamma - 1.));
 
             d.h[i]    = hUp;
