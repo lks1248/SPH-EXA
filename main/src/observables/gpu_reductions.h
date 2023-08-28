@@ -88,4 +88,12 @@ extern double machSquareSumGpu(const Tv* vx, const Tv* vy, const Tv* vz, const T
 template<class Tc, class Tt, class Tm>
 extern size_t survivorsGpu(const Tt* temp, const Tt* kx, const Tc* xmass, const Tm* m, double rhoBubble,
                            double tempWind, size_t first, size_t last);
+
+template<class T, class Tc, class Tm>
+util::tuple<std::vector<std::pair<T, T>>, std::vector<std::pair<T, T>>>
+localGrowthRateRTGpu(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, const T* h, const T* y, const T* vy,
+                     const Tm* markRamp){
+
+};
+
 } // namespace sphexa

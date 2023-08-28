@@ -60,8 +60,8 @@ __global__ void momentumEnergyGpu(T K, T Kcour, T Atmin, T Atmax, T ramp, unsign
                                   const T* c, const T* c11, const T* c12, const T* c13, const T* c22, const T* c23,
                                   const T* c33, const T* wh, const T* whd, const T* kx, const T* xm, const T* alpha,
                                   const T* dV11, const T* dV12, const T* dV13, const T* dV22, const T* dV23,
-                                  const T* dV33, T* grad_P_x, T* grad_P_y, T* grad_P_z, Tm1* du, LocalIndex* nidx,
-                                  TreeNodeIndex* globalPool)
+                                  const T* dV33, Tm* markRamp, T* grad_P_x, T* grad_P_y, T* grad_P_z, Tm1* du,
+                                  LocalIndex* nidx, TreeNodeIndex* globalPool)
 {
     unsigned laneIdx     = threadIdx.x & (GpuConfig::warpSize - 1);
     unsigned targetIdx   = 0;
@@ -92,8 +92,8 @@ __global__ void momentumEnergyGpu(T K, T Kcour, T Atmin, T Atmax, T ramp, unsign
 
         momentumAndEnergyJLoop<avClean, TravConfig::targetSize>(
             i, K, box, neighborsWarp + laneIdx, ncCapped, x, y, z, vx, vy, vz, h, m, prho, c, c11, c12, c13, c22, c23,
-            c33, Atmin, Atmax, ramp, wh, whd, kx, xm, alpha, dV11, dV12, dV13, dV22, dV23, dV33, grad_P_x, grad_P_y,
-            grad_P_z, du, &maxvsignal);
+            c33, Atmin, Atmax, ramp, wh, whd, kx, xm, alpha, dV11, dV12, dV13, dV22, dV23, dV33, markRamp, grad_P_x,
+            grad_P_y, grad_P_z, du, &maxvsignal);
 
         dt_i = stl::min(dt_i, tsKCourant(maxvsignal, h[i], c[i], Kcour));
     }
@@ -130,8 +130,8 @@ void computeMomentumEnergy(size_t startIndex, size_t endIndex, Dataset& d,
         rawPtr(d.devData.c23), rawPtr(d.devData.c33), rawPtr(d.devData.wh), rawPtr(d.devData.whd), rawPtr(d.devData.kx),
         rawPtr(d.devData.xm), rawPtr(d.devData.alpha), rawPtr(d.devData.dV11), rawPtr(d.devData.dV12),
         rawPtr(d.devData.dV13), rawPtr(d.devData.dV22), rawPtr(d.devData.dV23), rawPtr(d.devData.dV33),
-        rawPtr(d.devData.ax), rawPtr(d.devData.ay), rawPtr(d.devData.az), rawPtr(d.devData.du), nidxPool,
-        traversalPool);
+        rawPtr(d.devData.markRamp), rawPtr(d.devData.ax), rawPtr(d.devData.ay), rawPtr(d.devData.az),
+        rawPtr(d.devData.du), nidxPool, traversalPool);
     checkGpuErrors(cudaGetLastError());
 
     float minDt;

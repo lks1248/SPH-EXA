@@ -44,28 +44,38 @@
 #include "sph/math.hpp"
 #include "cstone/tree/definitions.h"
 #include "sph/particles_data.hpp"
+#include "sph/positions.hpp"
+#include "gpu_reductions.h"
 
 namespace sphexa
 {
 
-
-template<class T>
-struct AuxT
+/*template<class T>
+typedef struct AuxT
 {
     T pos;
     T vel;
-};
+};*/
+template<class T>
+using AuxT = std::pair<T, T>;
 
 struct greaterRT
 {
-template<class AuxT> bool operator()(AuxT const &a, AuxT const &b) const { return a.pos > b.pos; }
+    template<class AuxT>
+    bool operator()(AuxT const& a, AuxT const& b) const
+    {
+        return a.first > b.first;
+    }
 };
 
 struct lowerRT
 {
-template<class AuxT> bool operator()(AuxT const &a, AuxT const &b) const { return a.pos < b.pos; }
+    template<class AuxT>
+    bool operator()(AuxT const& a, AuxT const& b) const
+    {
+        return a.first < b.first;
+    }
 };
-
 
 /*! @brief local calculation of the maximum density (usually central) and radius
  *
@@ -78,42 +88,22 @@ template<class AuxT> bool operator()(AuxT const &a, AuxT const &b) const { retur
  * with higher radius. Sort function uses greater to sort in reverse order so
  * that we can benefit from resize to cut the vectors down to 50.
  */
-template<class T, class Tm> util::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
-localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, size_t ngmax, size_t n, const T Atmin, const T Atmax, const T ramp,
-        const T* y, const T* vy, const T* kx, const T* xm, const Tm* m, const cstone::LocalIndex* neighbors, const unsigned* neighborsCount)
+template<class T, class Tm, class Tc>
+util::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
+localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, const T* h, const T* y, const T* vy,
+                            const Tm* markRamp)
 {
-    std::vector<AuxT<T>> localUp(n);
-    std::vector<AuxT<T>> localDown(n);
+    std::vector<AuxT<T>> localUp(endIndex - startIndex);
+    std::vector<AuxT<T>> localDown(endIndex - startIndex);
 
 #pragma omp parallel for
     for (size_t i = startIndex; i < endIndex; i++)
     {
-        T rhoi = kx[i] * m[i] / xm[i];
-        T mark_ramp = 0.;
 
-        const cstone::LocalIndex* localNeighbors      = neighbors + ngmax * (i - startIndex);
-        unsigned                  localNeighborsCount = stl::min(neighborsCount[i], unsigned(ngmax));
-
-        for (unsigned pj = 0; pj < localNeighborsCount; ++pj)
+        if (markRamp[i] > 0.05 && !sph::fbcCheck(y[i], h[i], ymax, ymin, true))
         {
-            cstone::LocalIndex j = localNeighbors[pj];
-            T rhoj = kx[j] * m[j] / xm[j];
-
-            T Atwood   = (std::abs(rhoi - rhoj)) / (rhoi + rhoj);
-            if (Atwood > Atmax)
-            {
-                mark_ramp += T(1);
-            }
-            else if (Atwood >= Atmin)
-            {
-                T sigma_ij = ramp * (Atwood - Atmin);
-                mark_ramp += sigma_ij;
-            }
-        }
-
-        if (mark_ramp > 0.05) {
-            localUp[i-startIndex] = {y[i], vy[i]};
-            localDown[i-startIndex] = {y[i], vy[i]};
+            localUp[i - startIndex]   = {y[i], vy[i]};
+            localDown[i - startIndex] = {y[i], vy[i]};
         }
     }
 
@@ -123,7 +113,7 @@ localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, size_t ngmax, si
     localUp.resize(50);
     localDown.resize(50);
 
-    return{localUp, localDown};
+    return {localUp, localDown};
 }
 
 /*! @brief global calculation of the growth rate
@@ -136,14 +126,24 @@ localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, size_t ngmax, si
  * @param[in]     d            particle data set
  * @param[in]     box          bounding box
  */
-template<typename T, class Dataset> util::tuple<T, T>
-computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, MPI_Comm comm, const cstone::Box<T>& box, size_t ngmax)
+template<typename T, class Dataset>
+util::tuple<T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, MPI_Comm comm,
+                                                const cstone::Box<T>& box)
 {
-    //TODO no current GPU implementation! can't transfer neighbour data
-    //transferToHost(d, startIndex, endIndex, {"y", "vy", "rho", /*neighbours*/ "nc"});
+    util::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localRet;
+    if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
+    {
+        localRet = localGrowthRateRTGpu(startIndex, endIndex, box.ymin(), box.ymax(), rawPtr(d.devData.h),
+                                        rawPtr(d.devData.y), rawPtr(d.devData.vy), rawPtr(d.devData.markRamp));
+    }
+    else
+    {
+        localRet = localVelocitiesRTGrowthRate(startIndex, endIndex, box.ymin(), box.ymax(), d.h.data(), d.y.data(),
+                                               d.vy.data(), d.markRamp.data());
+    }
 
-    auto [localUp, localDown] = localVelocitiesRTGrowthRate(startIndex, endIndex, ngmax, d.x.size(), d.Atmin, d.Atmax, d.ramp,
-            d.y.data(), d.vy.data(), d.kx.data(), d.xm.data(), d.m.data(), d.neighbors.data(), d.nc.data());
+    std::vector<AuxT<T>> localUp   = util::get<0>(localRet);
+    std::vector<AuxT<T>> localDown = util::get<1>(localRet);
 
     int rootRank = 0;
     int mpiranks;
@@ -155,13 +155,13 @@ computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, MP
     std::vector<AuxT<T>> globalDown(rootsize);
 
     /* Create a MPI type for struct AuxT */
-    const int    nitems=2;
-    int          blocklengths[2] = {1,1};
-    MPI_Datatype types[2] = {MpiType<T>{}, MpiType<T>{}};
+    const int    nitems          = 2;
+    int          blocklengths[2] = {1, 1};
+    MPI_Datatype types[2]        = {MpiType<T>{}, MpiType<T>{}};
     MPI_Datatype mpi_AuxT_type;
     MPI_Aint     offsets[2];
-    offsets[0] = offsetof(AuxT<T>, pos);
-    offsets[1] = offsetof(AuxT<T>, vel);
+    offsets[0] = offsetof(AuxT<T>, first);
+    offsets[1] = offsetof(AuxT<T>, second);
     MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_AuxT_type);
     MPI_Type_commit(&mpi_AuxT_type);
 
@@ -184,12 +184,12 @@ computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, MP
 
         for (size_t i = 0; i < 50; i++)
         {
-            vy_max += globalUp[i].vel;
-            vy_min += globalDown[i].vel;
+            vy_max += globalUp[i].second;
+            vy_min += globalDown[i].second;
         }
     }
 
-    return {vy_max/T(50.), vy_min/T(50.)};
+    return {vy_max / T(50.), vy_min / T(50.)};
 }
 
 //! @brief Observables that includes times and velocities Rayleigh-Taylor growth rate
@@ -214,8 +214,7 @@ public:
 
         computeConservedQuantities(firstIndex, lastIndex, d, simData.comm);
 
-        auto [vy_max, vy_min] = computeVelocitiesRTGrowthRate<T>(firstIndex, lastIndex, d, simData.comm, box, d.ngmax);
-
+        auto [vy_max, vy_min] = computeVelocitiesRTGrowthRate<T>(firstIndex, lastIndex, d, simData.comm, box);
 
         if (rank == 0)
         {

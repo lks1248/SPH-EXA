@@ -180,4 +180,18 @@ SURVIVORS(double, double, float);
 SURVIVORS(double, float, float);
 SURVIVORS(float, float, float);
 
+struct markRampCond
+{
+    void operator()() {}
+};
+
+template<class T, class Tc, class Tm>
+util::tuple<std::vector<std::pair<T, T>>, std::vector<std::pair<T, T>>>
+localGrowthRateRTGpu(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, const T* h, const T* y, const T* vy,
+                     const Tm* markRamp){
+
+
+
+};
+
 } // namespace sphexa
