@@ -55,6 +55,7 @@ auto localConservedQuantities(size_t startIndex, size_t endIndex, Dataset& d)
     const auto* vz   = d.vz.data();
     const auto* m    = d.m.data();
     const auto* temp = d.temp.data();
+    const auto* u    = d.u.data();
 
     util::array<double, 3> linmom{0.0, 0.0, 0.0};
     util::array<double, 3> angmom{0.0, 0.0, 0.0};
@@ -79,8 +80,18 @@ auto localConservedQuantities(size_t startIndex, size_t endIndex, Dataset& d)
 
     double eInt = 0.0;
 
-    if (!d.temp.empty())
+    if (!d.u.empty())
     {
+#pragma omp parallel for reduction(+ : eInt)
+        for (size_t i = startIndex; i < endIndex; i++)
+        {
+            auto mi = m[i];
+            eInt += u[i] * mi;
+        }
+    }
+    else if (!d.temp.empty())
+    {
+
 #pragma omp parallel for reduction(+ : eInt)
         for (size_t i = startIndex; i < endIndex; i++)
         {
@@ -92,7 +103,6 @@ auto localConservedQuantities(size_t startIndex, size_t endIndex, Dataset& d)
 
     return std::make_tuple(0.5 * eKin, eInt, linmom, angmom);
 }
-
 
 /*! @brief Computation of globally conserved quantities
  *
@@ -118,8 +128,7 @@ void computeConservedQuantities(size_t startIndex, size_t endIndex, Dataset& d, 
         std::tie(eKin, eInt, linmom, angmom) = conservedQuantitiesGpu(
             sph::idealGasCv(d.muiConst, d.gamma), rawPtr(d.devData.x), rawPtr(d.devData.y), rawPtr(d.devData.z),
             rawPtr(d.devData.vx), rawPtr(d.devData.vy), rawPtr(d.devData.vz), rawPtr(d.devData.temp),
-            rawPtr(d.devData.m), startIndex, endIndex);
-
+            rawPtr(d.devData.u), rawPtr(d.devData.m), startIndex, endIndex);
     }
     else
     {
@@ -138,16 +147,16 @@ void computeConservedQuantities(size_t startIndex, size_t endIndex, Dataset& d, 
     util::array<double, 10> quantities, globalQuantities;
     std::fill(globalQuantities.begin(), globalQuantities.end(), double(0));
 
-    quantities[0]  = eKin;
-    quantities[1]  = eInt;
-    quantities[2]  = d.egrav;
-    quantities[3]  = linmom[0];
-    quantities[4]  = linmom[1];
-    quantities[5]  = linmom[2];
-    quantities[6]  = angmom[0];
-    quantities[7]  = angmom[1];
-    quantities[8]  = angmom[2];
-    quantities[9]  = double(ncsum);
+    quantities[0] = eKin;
+    quantities[1] = eInt;
+    quantities[2] = d.egrav;
+    quantities[3] = linmom[0];
+    quantities[4] = linmom[1];
+    quantities[5] = linmom[2];
+    quantities[6] = angmom[0];
+    quantities[7] = angmom[1];
+    quantities[8] = angmom[2];
+    quantities[9] = double(ncsum);
 
     int rootRank = 0;
     MPI_Reduce(quantities.data(), globalQuantities.data(), quantities.size(), MpiType<double>{}, MPI_SUM, rootRank,
