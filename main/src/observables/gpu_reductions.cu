@@ -33,6 +33,7 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform_reduce.h>
 #include <thrust/device_vector.h>
+#include <thrust/sort.h>
 
 #include "cstone/util/tuple.hpp"
 #include "gpu_reductions.h"
@@ -186,7 +187,7 @@ template<class T, class Tc, class Tm>
 struct MarkRampCond
 {
     HOST_DEVICE_FUN
-    void operator()(thrust::tuple<T, T, T, Tm, AuxT<T>, AuxT<T>>& p)
+    void operator()(thrust::tuple<T, T, T, Tm, AuxT<T>, AuxT<T>> p)
     {
         T  h        = get<0>(p);
         T  y        = get<1>(p);
@@ -217,8 +218,17 @@ std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size
 
     thrust::for_each(thrust::device, it1, it2, MarkRampCond<T, Tc, Tm>{ymin, ymax});
 
+    thrust::sort(thrust::device, targetUp.begin(), targetUp.end(), greaterRT());
+    thrust::sort(thrust::device, targetDown.begin(), targetDown.end(), lowerRT());
+
+    targetUp.resize(50);
+    targetDown.resize(50);
+
     std::vector<AuxT<T>> retUp(50);
     std::vector<AuxT<T>> retDown(50);
+    thrust::copy(targetUp.begin(), targetUp.end(), retUp.begin());
+    thrust::copy(targetDown.begin(), targetDown.end(), retDown.begin());
+
     return std::make_tuple(retUp, retDown);
 }
 

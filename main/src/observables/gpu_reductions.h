@@ -103,6 +103,7 @@ struct AuxT
 struct greaterRT
 {
     template<class AuxT>
+    HOST_DEVICE_FUN
     bool operator()(AuxT const& a, AuxT const& b) const
     {
         return a.pos > b.pos;
@@ -112,6 +113,7 @@ struct greaterRT
 struct lowerRT
 {
     template<class AuxT>
+    HOST_DEVICE_FUN
     bool operator()(AuxT const& a, AuxT const& b) const
     {
         return a.pos < b.pos;
