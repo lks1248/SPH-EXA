@@ -50,33 +50,6 @@
 namespace sphexa
 {
 
-/*template<class T>
-typedef struct AuxT
-{
-    T pos;
-    T vel;
-};*/
-template<class T>
-using AuxT = std::pair<T, T>;
-
-struct greaterRT
-{
-    template<class AuxT>
-    bool operator()(AuxT const& a, AuxT const& b) const
-    {
-        return a.first > b.first;
-    }
-};
-
-struct lowerRT
-{
-    template<class AuxT>
-    bool operator()(AuxT const& a, AuxT const& b) const
-    {
-        return a.first < b.first;
-    }
-};
-
 /*! @brief local calculation of the maximum density (usually central) and radius
  *
  * @tparam        T            double or float
@@ -89,7 +62,7 @@ struct lowerRT
  * that we can benefit from resize to cut the vectors down to 50.
  */
 template<class T, class Tm, class Tc>
-util::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
+std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
 localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, const T* h, const T* y, const T* vy,
                             const Tm* markRamp)
 {
@@ -130,11 +103,12 @@ template<typename T, class Dataset>
 util::tuple<T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, MPI_Comm comm,
                                                 const cstone::Box<T>& box)
 {
-    util::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localRet;
+    std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localRet;
     if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
     {
-        localRet = localGrowthRateRTGpu(startIndex, endIndex, box.ymin(), box.ymax(), rawPtr(d.devData.h),
-                                        rawPtr(d.devData.y), rawPtr(d.devData.vy), rawPtr(d.devData.markRamp));
+        std::tie(std::get<0>(localRet), std::get<1>(localRet)) =
+            localGrowthRateRTGpu(startIndex, endIndex, box.ymin(), box.ymax(), rawPtr(d.devData.h), rawPtr(d.devData.y),
+                                 rawPtr(d.devData.vy), rawPtr(d.devData.markRamp));
     }
     else
     {
@@ -160,8 +134,8 @@ util::tuple<T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t endInd
     MPI_Datatype types[2]        = {MpiType<T>{}, MpiType<T>{}};
     MPI_Datatype mpi_AuxT_type;
     MPI_Aint     offsets[2];
-    offsets[0] = offsetof(AuxT<T>, first);
-    offsets[1] = offsetof(AuxT<T>, second);
+    offsets[0] = offsetof(AuxT<T>, pos);
+    offsets[1] = offsetof(AuxT<T>, vel);
     MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_AuxT_type);
     MPI_Type_commit(&mpi_AuxT_type);
 
@@ -184,8 +158,8 @@ util::tuple<T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t endInd
 
         for (size_t i = 0; i < 50; i++)
         {
-            vy_max += globalUp[i].second;
-            vy_min += globalDown[i].second;
+            vy_max += globalUp[i].vel;
+            vy_min += globalDown[i].vel;
         }
     }
 

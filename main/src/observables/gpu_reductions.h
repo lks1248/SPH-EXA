@@ -89,11 +89,53 @@ template<class Tc, class Tt, class Tm>
 extern size_t survivorsGpu(const Tt* temp, const Tt* kx, const Tc* xmass, const Tm* m, double rhoBubble,
                            double tempWind, size_t first, size_t last);
 
-template<class T, class Tc, class Tm>
-util::tuple<std::vector<std::pair<T, T>>, std::vector<std::pair<T, T>>>
-localGrowthRateRTGpu(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, const T* h, const T* y, const T* vy,
-                     const Tm* markRamp){
-
+/*!
+ * @brief struct and sorting functors for the Rayleigh-Taylor Observable
+ * @tparam T floating point type of coordinates and velocities
+ */
+template<class T>
+struct AuxT
+{
+    T pos;
+    T vel;
 };
+
+struct greaterRT
+{
+    template<class AuxT>
+    bool operator()(AuxT const& a, AuxT const& b) const
+    {
+        return a.pos > b.pos;
+    }
+};
+
+struct lowerRT
+{
+    template<class AuxT>
+    bool operator()(AuxT const& a, AuxT const& b) const
+    {
+        return a.pos < b.pos;
+    }
+};
+/*!
+ * @brief collect velocity data of the bubble and peaks in the RT
+ *
+ * @tparam T
+ * @tparam Tc
+ * @tparam Tm
+ * @param startIndex
+ * @param endIndex
+ * @param ymin
+ * @param ymax
+ * @param h
+ * @param y
+ * @param vy
+ * @param markRamp
+ * @return
+ */
+template<class T, class Tc, class Tm>
+extern std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size_t first, size_t last, Tc ymin,
+                                                                                    Tc ymax, const T* h, const T* y,
+                                                                                    const T* vy, const Tm* markRamp);
 
 } // namespace sphexa

@@ -43,8 +43,8 @@ namespace sph
 {
 
 //! @brief checks whether a particle is in the fixed boundary region in one dimension
-template<class Tc, class Th>
-HOST_DEVICE_FUN bool fbcCheck(Tc coord, Th h, Tc top, Tc bottom, bool fbc)
+template<class Tc, class Th, class Tb>
+HOST_DEVICE_FUN bool fbcCheck(Tc coord, Th h, Tb top, Tb bottom, bool fbc)
 {
     return fbc && (std::abs(top - coord) < Th(2) * h || std::abs(bottom - coord) < Th(2) * h);
 }
