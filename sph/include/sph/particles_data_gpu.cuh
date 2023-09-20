@@ -96,7 +96,7 @@ public:
     DevVector<KeyType>  keys;                               // Particle space-filling-curve keys
     DevVector<unsigned> nc;                                 // number of neighbors of each particle
     DevVector<T>        dV11, dV12, dV13, dV22, dV23, dV33; // Velocity gradient components
-    DevVector<Tmass>    markRamp;                           //TODO description
+    DevVector<Tmass>    markRamp; // switch between crossed and uncrossed versions of the SPH equations
 
     //! @brief SPH interpolation kernel lookup tables
     DevVector<T> wh;
@@ -112,10 +112,10 @@ public:
      * Name of each field as string for use e.g in HDF5 output. Order has to correspond to what's returned by data().
      */
     inline static constexpr std::array fieldNames{
-        "x",     "y",    "z",   "x_m1", "y_m1", "z_m1", "vx",   "vy",   "vz",    "rho",  "u",     "p",
-        "prho",  "h",    "m",   "c",    "ax",   "ay",   "az",   "du",   "du_m1", "c11",  "c12",   "c13",
-        "c22",   "c23",  "c33", "mue",  "mui",  "temp", "cv",   "xm",   "kx",    "divv", "curlv", "alpha",
-        "gradh", "keys", "nc",  "dV11", "dV12", "dV13", "dV22", "dV23", "dV33", "markRamp"};
+        "x",     "y",    "z",   "x_m1", "y_m1", "z_m1", "vx",   "vy",   "vz",    "rho",     "u",     "p",
+        "prho",  "h",    "m",   "c",    "ax",   "ay",   "az",   "du",   "du_m1", "c11",     "c12",   "c13",
+        "c22",   "c23",  "c33", "mue",  "mui",  "temp", "cv",   "xm",   "kx",    "divv",    "curlv", "alpha",
+        "gradh", "keys", "nc",  "dV11", "dV12", "dV13", "dV22", "dV23", "dV33",  "markRamp"};
 
     /*! @brief return a tuple of field references
      *

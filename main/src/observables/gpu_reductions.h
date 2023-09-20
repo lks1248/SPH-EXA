@@ -96,15 +96,14 @@ extern size_t survivorsGpu(const Tt* temp, const Tt* kx, const Tc* xmass, const 
 template<class T>
 struct AuxT
 {
-    T pos;
+    T pos = T(1.0/0.0);
     T vel;
 };
 
 struct greaterRT
 {
     template<class AuxT>
-    HOST_DEVICE_FUN
-    bool operator()(AuxT const& a, AuxT const& b) const
+    HOST_DEVICE_FUN bool operator()(AuxT const& a, AuxT const& b) const
     {
         return a.pos > b.pos;
     }
@@ -113,31 +112,37 @@ struct greaterRT
 struct lowerRT
 {
     template<class AuxT>
-    HOST_DEVICE_FUN
-    bool operator()(AuxT const& a, AuxT const& b) const
+    HOST_DEVICE_FUN bool operator()(AuxT const& a, AuxT const& b) const
     {
         return a.pos < b.pos;
+    }
+};
+
+template<class T>
+struct invalidAuxTEntry
+{
+    template<class AuxT>
+    HOST_DEVICE_FUN bool operator()(const AuxT a) const
+    {
+        return a.pos == T(1.0/0.0);
     }
 };
 /*!
  * @brief collect velocity data of the bubble and peaks in the RT
  *
- * @tparam T
- * @tparam Tc
- * @tparam Tm
- * @param startIndex
- * @param endIndex
- * @param ymin
- * @param ymax
- * @param h
- * @param y
- * @param vy
- * @param markRamp
+ * @param first     index of first local particle
+ * @param last      index of last local particle
+ * @param ymin      bounding box mimimum in y-direction
+ * @param ymax      bounding box maximum
+ * @param h         smoothing length
+ * @param y         y-position
+ * @param vy        y-velocity
+ * @param markRamp  switch between crossed and uncrossed versions of the SPH equations
  * @return
  */
 template<class T, class Tc, class Tm>
 extern std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size_t first, size_t last, Tc ymin,
-                                                                                    Tc ymax, const T* h, const T* y,
-                                                                                    const T* vy, const Tm* markRamp);
+                                                                                   Tc ymax, const T* h, const T* y,
+                                                                                   const T* vy, const Tm* markRamp);
 
 } // namespace sphexa

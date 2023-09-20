@@ -34,6 +34,7 @@
 #include <thrust/transform_reduce.h>
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
+#include <thrust/remove.h>
 
 #include "cstone/util/tuple.hpp"
 #include "gpu_reductions.h"
@@ -187,13 +188,13 @@ template<class T, class Tc, class Tm>
 struct MarkRampCond
 {
     HOST_DEVICE_FUN
-    void operator()(thrust::tuple<T, T, T, Tm, AuxT<T>, AuxT<T>> p)
+    void operator()(thrust::tuple<T, T, T, Tm, AuxT<T>&, AuxT<T>&> p)
     {
         T  h        = get<0>(p);
         T  y        = get<1>(p);
         T  vy       = get<2>(p);
         Tm markRamp = get<3>(p);
-        if (markRamp > 0.05 && !sph::fbcCheck(y, h, ymax, ymin, (bool)true))
+        if (markRamp > 0.05 && !sph::fbcCheck(y, 2.0 * h, ymax, ymin, (bool)true))
         {
             thrust::get<4>(p) = {y, vy};
             thrust::get<5>(p) = {y, vy};
@@ -218,8 +219,11 @@ std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size
 
     thrust::for_each(thrust::device, it1, it2, MarkRampCond<T, Tc, Tm>{ymin, ymax});
 
-    thrust::sort(thrust::device, targetUp.begin(), targetUp.end(), greaterRT());
-    thrust::sort(thrust::device, targetDown.begin(), targetDown.end(), lowerRT());
+    auto endUp   = thrust::remove_if(targetUp.begin(), targetUp.end(), invalidAuxTEntry<T>());
+    auto endDown = thrust::remove_if(targetDown.begin(), targetDown.end(), invalidAuxTEntry<T>());
+
+    thrust::sort(thrust::device, targetUp.begin(), endUp, greaterRT());
+    thrust::sort(thrust::device, targetDown.begin(), endDown, lowerRT());
 
     targetUp.resize(50);
     targetDown.resize(50);

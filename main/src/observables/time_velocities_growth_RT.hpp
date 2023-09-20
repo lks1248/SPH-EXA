@@ -73,15 +73,18 @@ localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax
     for (size_t i = startIndex; i < endIndex; i++)
     {
 
-        if (markRamp[i] > 0.05 && !sph::fbcCheck(y[i], h[i], ymax, ymin, true))
+        if (markRamp[i] > 0.05 && !sph::fbcCheck(y[i], 2.0 * h[i], ymax, ymin, true))
         {
             localUp[i - startIndex]   = {y[i], vy[i]};
             localDown[i - startIndex] = {y[i], vy[i]};
         }
     }
 
-    std::sort(localUp.begin(), localUp.end(), greaterRT());
-    std::sort(localDown.begin(), localDown.end(), lowerRT());
+    auto endUp   = std::remove_if(localUp.begin(), localUp.end(), invalidAuxTEntry<T>());
+    auto endDown = std::remove_if(localDown.begin(), localDown.end(), invalidAuxTEntry<T>());
+
+    std::sort(localUp.begin(), endUp, greaterRT());
+    std::sort(localDown.begin(), endDown, lowerRT());
 
     localUp.resize(50);
     localDown.resize(50);
@@ -100,8 +103,8 @@ localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax
  * @param[in]     box          bounding box
  */
 template<typename T, class Dataset>
-util::tuple<T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, MPI_Comm comm,
-                                                const cstone::Box<T>& box)
+util::tuple<T, T, T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, MPI_Comm comm,
+                                                      const cstone::Box<T>& box)
 {
     std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localRet;
     if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
@@ -163,7 +166,7 @@ util::tuple<T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t endInd
         }
     }
 
-    return {vy_max / T(50.), vy_min / T(50.)};
+    return {vy_max / T(50.), vy_min / T(50.), globalUp[0].pos, globalDown[0].pos};
 }
 
 //! @brief Observables that includes times and velocities Rayleigh-Taylor growth rate
@@ -188,12 +191,13 @@ public:
 
         computeConservedQuantities(firstIndex, lastIndex, d, simData.comm);
 
-        auto [vy_max, vy_min] = computeVelocitiesRTGrowthRate<T>(firstIndex, lastIndex, d, simData.comm, box);
+        auto [vy_max, vy_min, pos_max, pos_min] =
+            computeVelocitiesRTGrowthRate<T>(firstIndex, lastIndex, d, simData.comm, box);
 
         if (rank == 0)
         {
             fileutils::writeColumns(constantsFile, ' ', d.iteration, d.ttot, d.minDt, d.etot, d.ecin, d.eint, d.egrav,
-                                    d.linmom, d.angmom, vy_min, vy_max);
+                                    d.linmom, d.angmom, vy_min, vy_max, pos_min, pos_max);
         }
     }
 };
