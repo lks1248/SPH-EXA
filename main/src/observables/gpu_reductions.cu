@@ -219,8 +219,8 @@ std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size
 
     thrust::for_each(thrust::device, it1, it2, MarkRampCond<T, Tc, Tm>{ymin, ymax});
 
-    auto endUp   = thrust::remove_if(targetUp.begin(), targetUp.end(), invalidAuxTEntry<T>());
-    auto endDown = thrust::remove_if(targetDown.begin(), targetDown.end(), invalidAuxTEntry<T>());
+    auto endUp   = thrust::remove_if(thrust::device, targetUp.begin(), targetUp.end(), invalidAuxTEntry<T>());
+    auto endDown = thrust::remove_if(thrust::device, targetDown.begin(), targetDown.end(), invalidAuxTEntry<T>());
 
     thrust::sort(thrust::device, targetUp.begin(), endUp, greaterRT());
     thrust::sort(thrust::device, targetDown.begin(), endDown, lowerRT());

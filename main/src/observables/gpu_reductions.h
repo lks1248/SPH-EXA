@@ -124,7 +124,7 @@ struct invalidAuxTEntry
     template<class AuxT>
     HOST_DEVICE_FUN bool operator()(const AuxT a) const
     {
-        return isinf(a.pos);
+        return a.pos == T(1.0/0.0);
     }
 };
 /*!
