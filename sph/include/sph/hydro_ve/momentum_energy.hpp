@@ -76,8 +76,6 @@ void computeMomentumEnergyImpl(size_t startIndex, size_t endIndex, Dataset& d, c
     auto* grad_P_y = d.ay.data();
     auto* grad_P_z = d.az.data();
 
-    auto* markRamp = d.markRamp.data();
-
     const auto* wh  = d.wh.data();
     const auto* whd = d.whd.data();
     const auto* kx  = d.kx.data();

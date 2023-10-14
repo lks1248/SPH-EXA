@@ -100,8 +100,8 @@ auto makeLessDenseTemplate(size_t n, const std::vector<T>& x, const std::vector<
  * @param axisMin min coordinate of the box in the axis of pos
  * @param size  number of particles
  */
-template<class T>
-void applyFixedBoundaries(T* pos, T* vx, T* vy, T* vz, T* h, T axisMax, T axisMin, size_t size)
+template<class T, class Th>
+void applyFixedBoundaries(T* pos, Th* vx, Th* vy, Th* vz, Th* h, T axisMax, T axisMin, size_t size)
 {
 
 #pragma omp parallel for

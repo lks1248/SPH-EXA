@@ -140,8 +140,8 @@ struct invalidAuxTEntry
  * @param markRamp  switch between crossed and uncrossed versions of the SPH equations
  * @return
  */
-template<class T, class Tc, class Tm>
+template<class T, class Tc, class Th>
 extern std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size_t first, size_t last, Tc ymin,
-                                                                                   Tc ymax, const T* h, const T* y,
-                                                                                   const T* vy, const Tm* markRamp);
+                                                                                   Tc ymax, const Th* h, const T* y,
+                                                                                   const Th* vy, const Th* markRamp);
 } // namespace sphexa

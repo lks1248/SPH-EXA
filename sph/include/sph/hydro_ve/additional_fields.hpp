@@ -38,8 +38,8 @@
 namespace sph
 {
 
-template<class T, class Dataset>
-void computeMarkRampImpl(size_t first, size_t last, Dataset d)
+template<class Dataset>
+void computeMarkRampImpl(size_t first, size_t last, Dataset& d)
 {
     const cstone::LocalIndex* neighbors      = d.neighbors.data();
     const unsigned*           neighborsCount = d.nc.data();

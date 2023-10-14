@@ -71,7 +71,7 @@ momentumAndEnergyJLoop(cstone::LocalIndex i, Tc K, const cstone::Box<Tc>& box, c
                        const T* c13, const T* c22, const T* c23, const T* c33, const T Atmin, const T Atmax,
                        const T ramp, const T* wh, const T* /*whd*/, const T* kx, const T* xm, const T* alpha,
                        const T* dV11, const T* dV12, const T* dV13, const T* dV22, const T* dV23, const T* dV33,
-                       Tm* markRamp, T* grad_P_x, T* grad_P_y, T* grad_P_z, Tm1* du, T* maxvsignal)
+                       T* grad_P_x, T* grad_P_y, T* grad_P_z, Tm1* du, T* maxvsignal)
 {
     auto xi  = x[i];
     auto yi  = y[i];
@@ -111,7 +111,6 @@ momentumAndEnergyJLoop(cstone::LocalIndex i, Tc K, const cstone::Box<Tc>& box, c
     // +1 is because we need to add selfparticle to neighborsCount
     T eta_crit = std::cbrt(T(32) * M_PI / T(3) / T(neighborsCount + 1));
 
-    markRamp[i] = Tm(0);
 
     for (unsigned pj = 0; pj < neighborsCount; ++pj)
     {
@@ -190,7 +189,6 @@ momentumAndEnergyJLoop(cstone::LocalIndex i, Tc K, const cstone::Box<Tc>& box, c
             a_mom = xmassi * xmassj;
             b_mom = a_mom;
 
-            markRamp[i] += Tm(1);
         }
         else
         {
@@ -198,7 +196,6 @@ momentumAndEnergyJLoop(cstone::LocalIndex i, Tc K, const cstone::Box<Tc>& box, c
             a_mom      = pow(xmassi, T(2) - sigma_ij) * pow(xmassj, sigma_ij);
             b_mom      = pow(xmassj, T(2) - sigma_ij) * pow(xmassi, sigma_ij);
 
-            markRamp[i] += sigma_ij;
         }
 
         auto a_visc   = mj / rhoi * viscosity_ij;
@@ -220,7 +217,6 @@ momentumAndEnergyJLoop(cstone::LocalIndex i, Tc K, const cstone::Box<Tc>& box, c
     a_visc_energy = stl::max(T(0), a_visc_energy);
     du[i]         = K * (energy + T(0.5) * a_visc_energy); // factor of 2 already removed from 2P/rho
 
-    markRamp[i] /= neighborsCount;
 
     // grad_P_xyz is stored as the acceleration,s accel = -grad_P / rho
     grad_P_x[i] = -K * momentum_x;

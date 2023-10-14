@@ -199,10 +199,10 @@ struct MarkRampCond
     Tc ymax;
 };
 
-template<class T, class Tc, class Tm>
+template<class T, class Tc, class Th>
 std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size_t first, size_t last, Tc ymin, Tc ymax,
-                                                                            const T* h, const T* y, const T* vy,
-                                                                            const Tm* markRamp)
+                                                                            const Th* h, const T* y, const Th* vy,
+                                                                            const Th* markRamp)
 {
     thrust::device_vector<AuxT<T>> targetUp(last - first);
     thrust::device_vector<AuxT<T>> targetDown(last - first);
@@ -212,7 +212,7 @@ std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size
     auto it2 = thrust::make_zip_iterator(
         thrust::make_tuple(h + last, y + last, vy + last, markRamp + last, targetUp.end(), targetDown.end()));
 
-    thrust::for_each(thrust::device, it1, it2, MarkRampCond<T, Tc, Tm>{ymin, ymax});
+    thrust::for_each(thrust::device, it1, it2, MarkRampCond<T, Tc, Th>{ymin, ymax});
 
     auto endUp   = thrust::remove_if(thrust::device, targetUp.begin(), targetUp.end(), invalidAuxTEntry<T>());
     auto endDown = thrust::remove_if(thrust::device, targetDown.begin(), targetDown.end(), invalidAuxTEntry<T>());
@@ -231,9 +231,9 @@ std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size
     return std::make_tuple(retUp, retDown);
 }
 
-#define RTGROWTH(T, Tc, Tm)                                                                                            \
+#define RTGROWTH(T, Tc, Th)                                                                                            \
     template std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(                              \
-        size_t first, size_t last, Tc ymin, Tc ymax, const T* h, const T* y, const T* vy, const Tm* markRamp);
+        size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y, const Th* vy, const Th* markRamp);
 
 RTGROWTH(double, double, double);
 RTGROWTH(double, float, double);

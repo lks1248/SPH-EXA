@@ -61,10 +61,10 @@ namespace sphexa
  * with higher radius. Sort function uses greater to sort in reverse order so
  * that we can benefit from resize to cut the vectors down to 50.
  */
-template<class T, class Tm, class Tc>
+template<class T, class Th, class Tc>
 std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
-localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, const T* h, const T* y, const T* vy,
-                            const Tm* markRamp)
+localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, const Th* h, const T* y, const Th* vy,
+                            const Th* markRamp)
 {
     std::vector<AuxT<T>> localUp(endIndex - startIndex);
     std::vector<AuxT<T>> localDown(endIndex - startIndex);

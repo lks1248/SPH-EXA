@@ -77,6 +77,9 @@ public:
        computeTimestep(first, last, d);
        timer.step("Timestep");
 
+       computeMarkRamp(first, last, d, domain.box());
+       timer.step("MarkRamp");
+
        artificialGravity(first, last, d.ay.data());
        timer.step("ArtificialGravity");
 
