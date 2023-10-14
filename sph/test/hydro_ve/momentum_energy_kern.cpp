@@ -41,8 +41,10 @@
 using namespace sph;
 
 template<class T>
-void symmetrizeGradV(util::array<const T *, 9> dV, util::array<T *, 6> sdV, size_t n) {
-    for (size_t i = 0; i < n; ++i) {
+void symmetrizeGradV(util::array<const T*, 9> dV, util::array<T*, 6> sdV, size_t n)
+{
+    for (size_t i = 0; i < n; ++i)
+    {
         sdV[0][i] = dV[0][i];
         sdV[1][i] = dV[1][i] + dV[3][i];
         sdV[2][i] = dV[2][i] + dV[6][i];
@@ -52,27 +54,29 @@ void symmetrizeGradV(util::array<const T *, 9> dV, util::array<T *, 6> sdV, size
     }
 }
 
-TEST(MomentumEnergy, JLoop) {
+TEST(MomentumEnergy, JLoop)
+{
     using T = double;
 
     T sincIndex = 6.0;
-    T K = compute_3d_k(sincIndex);
-    T Atmin = 0.1;
-    T Atmax = 0.2;
-    T ramp = 1.0 / (Atmax - Atmin);
-    T mpart = 3.781038064465603e26;
+    T K         = compute_3d_k(sincIndex);
+    T Atmin     = 0.1;
+    T Atmax     = 0.2;
+    T ramp      = 1.0 / (Atmax - Atmin);
+    T mpart     = 3.781038064465603e26;
 
-    std::array<double, lt::size> wh = lt::createWharmonicLookupTable<double, lt::size>(sincIndex);
-    std::array<double, lt::size> whd = lt::createWharmonicDerivativeLookupTable<double, lt::size>(sincIndex);
+    std::array<double, lt::size> wh  = lt::createWharmonicTable<double, lt::size>(sincIndex);
+    std::array<double, lt::size> whd = lt::createWharmonicDerivativeTable<double, lt::size>(sincIndex);
 
     cstone::Box<T> box(-1.e9, 1.e9, cstone::BoundaryType::open);
 
-    size_t npart = 99;
+    size_t   npart          = 99;
     unsigned neighborsCount = npart - 1, i;
 
     std::vector<cstone::LocalIndex> neighbors(neighborsCount - 1);
 
-    for (i = 0; i < neighborsCount; i++) {
+    for (i = 0; i < neighborsCount; i++)
+    {
         neighbors[i] = i + 1;
     }
 
@@ -110,14 +114,13 @@ TEST(MomentumEnergy, JLoop) {
     std::vector<T> sumwh(npart);
     std::vector<T> xm(npart);
     std::vector<T> kx(npart);
-    std::vector<T> markRamp(npart);
 
-    std::vector<T *> fields{x.data(), y.data(), z.data(), vx.data(), vy.data(), vz.data(),
-                            h.data(), c.data(), c11.data(), c12.data(), c13.data(), c22.data(),
-                            c23.data(), c33.data(), p.data(), gradh.data(), rho0.data(), sumwhrho0.data(),
-                            sumwh.data(), dvxdx.data(), dvxdy.data(), dvxdz.data(), dvydx.data(), dvydy.data(),
-                            dvydz.data(), dvzdx.data(), dvzdy.data(), dvzdz.data(), alpha.data(), u.data(),
-                            divv.data()};
+    std::vector<T*> fields{x.data(),     y.data(),     z.data(),     vx.data(),    vy.data(),    vz.data(),
+                           h.data(),     c.data(),     c11.data(),   c12.data(),   c13.data(),   c22.data(),
+                           c23.data(),   c33.data(),   p.data(),     gradh.data(), rho0.data(),  sumwhrho0.data(),
+                           sumwh.data(), dvxdx.data(), dvxdy.data(), dvxdz.data(), dvydx.data(), dvydy.data(),
+                           dvydz.data(), dvzdx.data(), dvzdy.data(), dvzdz.data(), alpha.data(), u.data(),
+                           divv.data()};
 
     sphexa::fileutils::readAscii("example_data.txt", npart, fields);
 
@@ -133,23 +136,25 @@ TEST(MomentumEnergy, JLoop) {
 
     std::fill(m.begin(), m.end(), mpart);
 
-    for (i = 0; i < neighborsCount + 1; i++) {
+    for (i = 0; i < neighborsCount + 1; i++)
+    {
         xm[i] = mpart / rho0[i];
         kx[i] = K * xm[i] / std::pow(h[i], 3);
     }
 
     std::vector<T> prho(p.size());
-    for (size_t k = 0; k < prho.size(); ++k) {
+    for (size_t k = 0; k < prho.size(); ++k)
+    {
         prho[k] = p[k] / (kx[k] * m[k] * m[k] * gradh[k]);
     }
 
     // test with AV cleaning
     {
         // fill with invalid initial value to make sure that the kernel overwrites it instead of add to it
-        T du = -1;
-        T grad_Px = -1;
-        T grad_Py = -1;
-        T grad_Pz = -1;
+        T du         = -1;
+        T grad_Px    = -1;
+        T grad_Py    = -1;
+        T grad_Pz    = -1;
         T maxvsignal = -1;
 
         // compute gradient for for particle 0
@@ -158,7 +163,6 @@ TEST(MomentumEnergy, JLoop) {
                                      c11.data(), c12.data(), c13.data(), c22.data(), c23.data(), c33.data(), Atmin,
                                      Atmax, ramp, wh.data(), whd.data(), kx.data(), xm.data(), alpha.data(),
                                      dV11.data(), dV12.data(), dV13.data(), dV22.data(), dV23.data(), dV33.data(),
-                                     markRamp.data(),
                                      &grad_Px, &grad_Py, &grad_Pz, &du, &maxvsignal);
 
         EXPECT_NEAR(grad_Px, -505548.68073726865, 0.023);
@@ -169,10 +173,10 @@ TEST(MomentumEnergy, JLoop) {
     }
     // test without AV cleaning
     {
-        T du = -1;
-        T grad_Px = -1;
-        T grad_Py = -1;
-        T grad_Pz = -1;
+        T du         = -1;
+        T grad_Px    = -1;
+        T grad_Py    = -1;
+        T grad_Pz    = -1;
         T maxvsignal = -1;
 
         // compute gradient for for particle 0
@@ -181,7 +185,6 @@ TEST(MomentumEnergy, JLoop) {
                                       c11.data(), c12.data(), c13.data(), c22.data(), c23.data(), c33.data(), Atmin,
                                       Atmax, ramp, wh.data(), whd.data(), kx.data(), xm.data(), alpha.data(),
                                       dV11.data(), dV12.data(), dV13.data(), dV22.data(), dV23.data(), dV33.data(),
-                                      markRamp.data(),
                                       &grad_Px, &grad_Py, &grad_Pz, &du, &maxvsignal);
 
         EXPECT_NEAR(grad_Px, -521261.07791667967, 0.022);
