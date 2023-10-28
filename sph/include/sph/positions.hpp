@@ -111,15 +111,30 @@ void updatePositionsHost(size_t startIndex, size_t endIndex, Dataset& d, const c
     }
 }
 
-template<class Dataset>
-void updateTempHost(size_t startIndex, size_t endIndex, Dataset& d)
+template<class Dataset, class T>
+void updateTempHost(size_t startIndex, size_t endIndex, Dataset& d, const cstone::Box<T>& box)
 {
+    bool fbcX = (box.boundaryX() == cstone::BoundaryType::fixed);
+    bool fbcY = (box.boundaryY() == cstone::BoundaryType::fixed);
+    bool fbcZ = (box.boundaryZ() == cstone::BoundaryType::fixed);
+
+    bool anyFBC = fbcX || fbcY || fbcZ;
+
     bool haveMui = !d.mui.empty();
     auto constCv = idealGasCv(d.muiConst, d.gamma);
 
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; i++)
     {
+        if (anyFBC && d.vx[i] == T(0) && d.vy[i] == T(0) && d.vz[i] == T(0))
+        {
+            if (fbcCheck(d.x[i], d.h[i], box.xmax(), box.xmin(), fbcX) ||
+                fbcCheck(d.y[i], d.h[i], box.ymax(), box.ymin(), fbcY) ||
+                fbcCheck(d.z[i], d.h[i], box.zmax(), box.zmin(), fbcZ))
+            {
+                continue;
+            }
+        }
         auto cv    = haveMui ? idealGasCv(d.mui[i], d.gamma) : constCv;
         auto u_old = cv * d.temp[i];
         d.temp[i]  = energyUpdate(u_old, d.minDt, d.minDt_m1, d.du[i], d.du_m1[i]) / cv;
@@ -127,12 +142,27 @@ void updateTempHost(size_t startIndex, size_t endIndex, Dataset& d)
     }
 }
 
-template<class Dataset>
-void updateIntEnergyHost(size_t startIndex, size_t endIndex, Dataset& d)
+template<class Dataset, class T>
+void updateIntEnergyHost(size_t startIndex, size_t endIndex, Dataset& d, const cstone::Box<T>& box)
 {
+    bool fbcX = (box.boundaryX() == cstone::BoundaryType::fixed);
+    bool fbcY = (box.boundaryY() == cstone::BoundaryType::fixed);
+    bool fbcZ = (box.boundaryZ() == cstone::BoundaryType::fixed);
+
+    bool anyFBC = fbcX || fbcY || fbcZ;
+
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; i++)
     {
+        if (anyFBC && d.vx[i] == T(0) && d.vy[i] == T(0) && d.vz[i] == T(0))
+        {
+            if (fbcCheck(d.x[i], d.h[i], box.xmax(), box.xmin(), fbcX) ||
+                fbcCheck(d.y[i], d.h[i], box.ymax(), box.ymin(), fbcY) ||
+                fbcCheck(d.z[i], d.h[i], box.zmax(), box.zmin(), fbcZ))
+            {
+                continue;
+            }
+        }
         d.u[i]     = energyUpdate(d.u[i], d.minDt, d.minDt_m1, d.du[i], d.du_m1[i]);
         d.du_m1[i] = d.du[i];
     }
@@ -157,8 +187,8 @@ void computePositions(size_t startIndex, size_t endIndex, Dataset& d, const csto
     {
         updatePositionsHost(startIndex, endIndex, d, box);
 
-        if (!d.temp.empty()) { updateTempHost(startIndex, endIndex, d); }
-        else if (!d.u.empty()) { updateIntEnergyHost(startIndex, endIndex, d); }
+        if (!d.temp.empty()) { updateTempHost(startIndex, endIndex, d, box); }
+        else if (!d.u.empty()) { updateIntEnergyHost(startIndex, endIndex, d, box); }
     }
 }
 

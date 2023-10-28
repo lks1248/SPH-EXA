@@ -158,7 +158,7 @@ public:
         computeVeDefGradh(first, last, d, domain.box());
         timer.step("Normalization & Gradh");
 
-        computeEOS(first, last, d);
+        computeEOS(first, last, d, domain.box());
         timer.step("EquationOfState");
 
         domain.exchangeHalos(get<"vx", "vy", "vz", "prho", "c", "kx">(d), get<"ax">(d), get<"keys">(d));
@@ -255,7 +255,7 @@ public:
         // second output pass: write temporary quantities produced by the EOS
         d.acquire("rho", "p", "gradh");
         d.devData.acquire("rho", "p", "gradh");
-        computeEOS(first, last, d);
+        computeEOS(first, last, d, box);
         output();
         d.devData.release("rho", "p", "gradh");
         d.release("rho", "p", "gradh");
