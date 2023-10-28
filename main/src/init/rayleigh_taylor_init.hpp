@@ -54,7 +54,7 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     T firstTimeStep = constants.at("firstTimeStep");
     T omega0        = constants.at("omega0");
     T gamma         = constants.at("gamma");
-    T p0            = constants.at("p0");
+    T p0            = rhoUp / gamma;
     T y0            = constants.at("y0");
     T g             = 0.5;
 
@@ -83,7 +83,7 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
 
         if (d.y[i] < y0)
         {
-            T p = p0 + rhoDown * (y0 - d.y[i]) * g;
+            T p = p0 - rhoDown * (d.y[i] - y0) * g;
             T u = p / (rhoDown * (gamma - 1.));
 
             d.h[i]    = hDown;
@@ -106,9 +106,9 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
 
 std::map<std::string, double> RayleighTaylorConstants()
 {
-    return {{"rhoUp", 2.},         {"rhoDown", 1.}, {"gamma", 1.4},     {"firstTimeStep", 1e-4},
-            {"p0", 2.5},           {"y0", 0.75},    {"omega0", 0.0025}, {"ay0", -0.5},
-            {"blockSize", 0.0625}, {"xSize", 0.5},  {"ySize", 1.5},     {"zSize", 0.0625}};
+    return {{"rhoUp", 2.},  {"rhoDown", 1.},    {"gamma", 1.4},   {"firstTimeStep", 1e-6},
+            {"y0", 0.75},   {"omega0", 0.0025}, {"ay0", -0.5},    {"blockSize", 0.0625},
+            {"xSize", 0.5}, {"ySize", 1.5},     {"zSize", 0.0625}};
 }
 
 template<class Dataset>
