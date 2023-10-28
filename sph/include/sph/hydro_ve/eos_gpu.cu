@@ -43,18 +43,19 @@ namespace cuda
 {
 
 template<class Tt, class Tm, class Thydro>
-__global__ void cudaEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, const Thydro* h, Tt* x,
+__global__ void cudaEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, const Thydro* h, const Tt* x,
                         const Tt* y, const Tt* z, const Thydro* vx, const Thydro* vy, const Thydro* vz, const Tt* temp,
                         const Tm* m, const Thydro* kx, const Thydro* xm, const Thydro* gradh, Thydro* prho, Thydro* c,
-                        Thydro* rho, Thydro* p, const cstone::Box<Tt>& box)
+                        Thydro* rho, Thydro* p, const cstone::Box<Tt> box)
 {
+
+    cstone::LocalIndex i = firstParticle + blockDim.x * blockIdx.x + threadIdx.x;
+    if (i >= lastParticle) return;
+
     bool fbcX   = (box.boundaryX() == cstone::BoundaryType::fixed);
     bool fbcY   = (box.boundaryY() == cstone::BoundaryType::fixed);
     bool fbcZ   = (box.boundaryZ() == cstone::BoundaryType::fixed);
     bool anyFBC = fbcX || fbcY || fbcZ;
-
-    unsigned i = firstParticle + blockDim.x * blockIdx.x + threadIdx.x;
-    if (i >= lastParticle) return;
 
     if (anyFBC && vx[i] == Thydro(0) && vy[i] == Thydro(0) && vz[i] == Thydro(0))
     {
@@ -74,7 +75,7 @@ __global__ void cudaEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt ga
 }
 
 template<class Tt, class Tm, class Thydro>
-void computeEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, const Thydro* h, Tt* x, const Tt* y,
+void computeEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, const Thydro* h, const Tt* x, const Tt* y,
                 const Tt* z, const Thydro* vx, const Thydro* vy, const Thydro* vz, const Tt* temp, const Tm* m,
                 const Thydro* kx, const Thydro* xm, const Thydro* gradh, Thydro* prho, Thydro* c, Thydro* rho,
                 Thydro* p, const cstone::Box<Tt>& box)
@@ -87,10 +88,11 @@ void computeEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, con
 }
 
 #define COMPUTE_EOS(Tt, Tm, Thydro)                                                                                    \
-    template void computeEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, const Thydro* h, Tt* x,      \
-                             const Tt* y, const Tt* z, const Thydro* vx, const Thydro* vy, const Thydro* vz,           \
-                             const Tt* temp, const Tm* m, const Thydro* kx, const Thydro* xm, const Thydro* gradh,     \
-                             Thydro* prho, Thydro* c, Thydro* rho, Thydro* p, const cstone::Box<Tt>& box)
+    template void computeEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, const Thydro* h,             \
+                             const Tt* x, const Tt* y, const Tt* z, const Thydro* vx, const Thydro* vy,                \
+                             const Thydro* vz, const Tt* temp, const Tm* m, const Thydro* kx, const Thydro* xm,        \
+                             const Thydro* gradh, Thydro* prho, Thydro* c, Thydro* rho, Thydro* p,                     \
+                             const cstone::Box<Tt>& box)
 
 COMPUTE_EOS(double, double, double);
 COMPUTE_EOS(double, float, double);
