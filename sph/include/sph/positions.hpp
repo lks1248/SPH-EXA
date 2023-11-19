@@ -46,7 +46,7 @@ namespace sph
 template<class Tc, class Th, class Tb>
 HOST_DEVICE_FUN bool fbcCheck(Tc coord, Th h, Tb top, Tb bottom, bool fbc)
 {
-    return fbc && (std::abs(top - coord) < Th(2) * h || std::abs(bottom - coord) < Th(2) * h);
+    return fbc && (std::abs(top - coord) < Th(16) * h || std::abs(bottom - coord) < Th(16) * h);
 }
 
 //! @brief update the energy according to Adams-Bashforth (2nd order)

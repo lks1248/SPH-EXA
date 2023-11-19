@@ -37,7 +37,6 @@
 #include "cstone/sfc/box.hpp"
 #include "cstone/sfc/sfc.hpp"
 #include "cstone/primitives/gather.hpp"
-#include "io/mpi_file_utils.hpp"
 #include "isim_init.hpp"
 
 #include "utils.hpp"
@@ -104,28 +103,51 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     }
 }
 
+/*!
+ * @brief create temporary smoothing lengths to add fixed boundary particles
+ */
+template<class Dataset, class T>
+std::vector<T> createSmoothingLength(Dataset& d, std::map<std::string, double>& constants, T particleMass)
+{
+    T              rhoUp   = constants.at("rhoUp");
+    T              rhoDown = constants.at("rhoDown");
+    T              y0      = constants.at("y0");
+    size_t         ng0     = 100;
+    T              hUp     = 0.5 * std::cbrt(3. * ng0 * particleMass / 4. / M_PI / rhoUp);
+    T              hDown   = 0.5 * std::cbrt(3. * ng0 * particleMass / 4. / M_PI / rhoDown);
+    std::vector<T> h(d.x.size());
+
+    for (int i = 0; i < d.x.size(); ++i)
+    {
+        if (d.y[i] < y0) { h[i] = hDown; }
+        else { h[i] = hUp; }
+    }
+    return h;
+}
+
 std::map<std::string, double> RayleighTaylorConstants()
 {
     return {{"rhoUp", 2.},  {"rhoDown", 1.},    {"gamma", 1.4},   {"firstTimeStep", 1e-6},
             {"y0", 0.75},   {"omega0", 0.0025}, {"ay0", -0.5},    {"blockSize", 0.0625},
-            {"xSize", 0.5}, {"ySize", 1.5},     {"zSize", 0.0625}};
+            {"xSize", 0.5}, {"ySize", 1.5},     {"zSize", 0.0625}, {"fbcThickness",8.}};
 }
 
 template<class Dataset>
 class RayleighTaylorGlass : public ISimInitializer<Dataset>
 {
-    std::string                   glassBlock;
-    std::map<std::string, double> constants_;
+    std::string          glassBlock;
+    mutable InitSettings settings_;
 
 public:
-    RayleighTaylorGlass(std::string initBlock)
-        : glassBlock(initBlock)
+    RayleighTaylorGlass(std::string glassBlock, std::string settingsFile, IFileReader* reader)
+        : glassBlock(std::move(glassBlock))
     {
-        constants_ = RayleighTaylorConstants();
+        Dataset d;
+        settings_ = buildSettings(d, RayleighTaylorConstants(), settingsFile, reader);
     }
 
-    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cbrtNumPart,
-                                                 Dataset& simData) const override
+    cstone::Box<typename Dataset::RealType> init(int rank, int numRanks, size_t cbrtNumPart, Dataset& simData,
+                                                 IFileReader* reader) const override
     {
 
         using KeyType = typename Dataset::KeyType;
@@ -138,12 +160,13 @@ public:
                                      "RT-ve. Please restart with '--prop RT-ve'\n");
         }
 
-        T rhoUp = constants_.at("rhoUp");
+        T rhoUp = settings_.at("rhoUp");
 
-        T blockSize = constants_.at("blockSize");
-        T xSize     = constants_.at("xSize");
-        T ySize     = constants_.at("ySize");
-        T zSize     = constants_.at("zSize");
+        T blockSize = settings_.at("blockSize");
+        T xSize     = settings_.at("xSize");
+        T ySize     = settings_.at("ySize");
+        T zSize     = settings_.at("zSize");
+        T fbcThickness = settings_.at("fbcThickness");
 
         int xBlocks = xSize / blockSize;
         int yBlocks = ySize / blockSize;
@@ -153,9 +176,9 @@ public:
         size_t halfBlocks = nBlocks / 2;
 
         std::vector<T> xBlock, yBlock, zBlock;
-        fileutils::readTemplateBlock(glassBlock, xBlock, yBlock, zBlock);
+        readTemplateBlock(glassBlock, reader, xBlock, yBlock, zBlock);
 
-        cstone::Box<T> globalBox(0, xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic,
+        cstone::Box<T> initBox(0, xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic,
                                  cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
 
         unsigned level             = cstone::log8ceil<KeyType>(100 * numRanks);
@@ -163,6 +186,7 @@ public:
         KeyType  keyStart          = initialBoundaries[rank];
         KeyType  keyEnd            = initialBoundaries[rank + 1];
 
+        sortBySfcKey<KeyType>(xBlock, yBlock, zBlock);
         auto [xHalf, yHalf, zHalf] = makeLessDenseTemplate<T>(2, xBlock, yBlock, zBlock);
 
         int               multi1D      = std::rint(cbrtNumPart / std::cbrt(xBlock.size()));
@@ -176,23 +200,36 @@ public:
         assembleCuboid<T>(keyStart, keyEnd, layer1, multiplicity, xHalf, yHalf, zHalf, d.x, d.y, d.z);
         assembleCuboid<T>(keyStart, keyEnd, layer2, multiplicity, xBlock, yBlock, zBlock, d.x, d.y, d.z);
 
-        size_t npartUp  = halfBlocks * xBlock.size();
-        T      volumeHD = xSize * constants_.at("y0") * zSize; // (x_size * y_size * z_size) in the high-density zone
+        size_t npartUp      = halfBlocks * xBlock.size();
+        T      volumeHD     = xSize * settings_.at("y0") * zSize; // (x_size * y_size * z_size) in the high-density zone
         T      particleMass = volumeHD * rhoUp / npartUp;
+
+        std::vector h = createSmoothingLength(d, settings_, particleMass);
+        addFixedBoundaryLayer(Axis.y, d.x, d.y, d.z, h, d.x.size(), initBox, fbcThickness);
+
+        size_t numParticlesGlobal = d.x.size();
+        MPI_Allreduce(MPI_IN_PLACE, &numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, simData.comm);
+
+        syncCoords<KeyType>(rank, numRanks, numParticlesGlobal, d.x, d.y, d.z, initBox);
 
         d.resize(d.x.size());
 
-        initRayleighTaylorFields(d, constants_, particleMass);
-        applyFixedBoundaries(d.y.data(), d.vx.data(), d.vy.data(), d.vz.data(), d.h.data(), globalBox.ymax(),
-                             globalBox.ymin(), d.x.size());
+        settings_["numParticlesGlobal"] = double(numParticlesGlobal);
+        BuiltinWriter attributeSetter(settings_);
+        d.loadOrStoreAttributes(&attributeSetter);
 
-        d.numParticlesGlobal = d.x.size();
-        MPI_Allreduce(MPI_IN_PLACE, &d.numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, simData.comm);
+        initRayleighTaylorFields(d, settings_, particleMass);
+        initFixedBoundaries(d.y.data(), d.vx.data(), d.vy.data(), d.vz.data(), d.h.data(), initBox.ymax(),
+                            initBox.ymin(), d.x.size(), fbcThickness);
 
+        T newYMin = *std::min_element(d.y.begin(), d.y.end());
+        T newYMax = *std::max_element(d.y.begin(), d.y.end());
+        cstone::Box<T> globalBox(0, xSize, newYMin, newYMax, 0, zSize, cstone::BoundaryType::periodic,
+                                 cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
         return globalBox;
     }
 
-    const std::map<std::string, double>& constants() const override { return constants_; }
+    [[nodiscard]] const InitSettings& constants() const override { return settings_; }
 };
 
 } // namespace sphexa
