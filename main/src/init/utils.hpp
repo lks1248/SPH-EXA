@@ -49,7 +49,8 @@ namespace sphexa
 template<class KeyType, class T>
 void sortBySfcKey(std::vector<T>& x, std::vector<T>& y, std::vector<T>& z)
 {
-    assert(x.size() == y.size() == z.size());
+    assert(x.size() == y.size());
+    assert(y.size() == z.size());
     size_t blockSize = x.size();
 
     cstone::Box<T> box(0, 1);
@@ -110,7 +111,8 @@ auto skipElements(size_t n, const std::vector<T>& x)
 template<class T>
 auto makeLessDenseTemplate(size_t n, const std::vector<T>& x, const std::vector<T>& y, const std::vector<T>& z)
 {
-    assert(x.size() == y.size() == z.size());
+    assert(x.size() == y.size());
+    assert(y.size() == z.size());
     return std::make_tuple(skipElements(n, x), skipElements(n, y), skipElements(n, z));
 }
 

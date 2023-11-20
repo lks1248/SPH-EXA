@@ -218,21 +218,24 @@ public:
         size_t numParticlesGlobal = d.x.size();
         MPI_Allreduce(MPI_IN_PLACE, &numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, simData.comm);
 
-        syncCoords<KeyType>(rank, numRanks, numParticlesGlobal, d.x, d.y, d.z, initBox);
+        T              newYMin = *std::min_element(d.y.begin(), d.y.end());
+        T              newYMax = *std::max_element(d.y.begin(), d.y.end());
+        cstone::Box<T> globalBox(0, xSize, newYMin, newYMax, 0, zSize, cstone::BoundaryType::periodic,
+                                 cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
+
+        syncCoords<KeyType>(rank, numRanks, numParticlesGlobal, d.x, d.y, d.z, globalBox);
 
         d.resize(d.x.size());
 
         settings_["numParticlesGlobal"] = double(numParticlesGlobal);
         BuiltinWriter attributeSetter(settings_);
         d.loadOrStoreAttributes(&attributeSetter);
-        initRayleighTaylorFields(d, settings_, particleMass);
-        initFixedBoundaries(d.y.data(), d.vx.data(), d.vy.data(), d.vz.data(), d.h.data(), initBox.ymax(),
-                            initBox.ymin(), d.x.size(), fbcThickness);
 
-        T              newYMin = *std::min_element(d.y.begin(), d.y.end());
-        T              newYMax = *std::max_element(d.y.begin(), d.y.end());
-        cstone::Box<T> globalBox(0, xSize, newYMin, newYMax, 0, zSize, cstone::BoundaryType::periodic,
-                                 cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
+        initRayleighTaylorFields(d, settings_, particleMass);
+        initFixedBoundaries(d.y.data(), d.vx.data(), d.vy.data(), d.vz.data(), d.h.data(), globalBox.ymax(),
+                            globalBox.ymin(), d.x.size(), fbcThickness);
+
+
         return globalBox;
     }
 

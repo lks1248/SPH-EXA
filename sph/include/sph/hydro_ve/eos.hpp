@@ -68,12 +68,13 @@ void computeEOS_Impl(size_t startIndex, size_t endIndex, Dataset& d, const cston
     bool fbcY = (box.boundaryY() == cstone::BoundaryType::fixed);
     bool fbcZ = (box.boundaryZ() == cstone::BoundaryType::fixed);
 
-    bool anyFBC = fbcX || fbcY || fbcZ;
+    bool anyFBC    = fbcX || fbcY || fbcZ;
+    bool firstIter = d.iteration == 1;
 
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; ++i)
     {
-        if (anyFBC && d.vx[i] == T(0) && d.vy[i] == T(0) && d.vz[i] == T(0))
+        if (!firstIter && anyFBC && d.vx[i] == T(0) && d.vy[i] == T(0) && d.vz[i] == T(0))
         {
             if (fbcCheck(d.x[i], d.h[i], box.xmax(), box.xmin(), fbcX) ||
                 fbcCheck(d.y[i], d.h[i], box.ymax(), box.ymin(), fbcY) ||
@@ -97,11 +98,12 @@ void computeEOS(size_t startIndex, size_t endIndex, Dataset& d, const cstone::Bo
 {
     if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
     {
+        bool firstIter = d.iteration == 1;
         cuda::computeEOS(startIndex, endIndex, d.muiConst, d.gamma, rawPtr(d.devData.h), rawPtr(d.devData.x),
                          rawPtr(d.devData.y), rawPtr(d.devData.z), rawPtr(d.devData.vx), rawPtr(d.devData.vy),
                          rawPtr(d.devData.vz), rawPtr(d.devData.temp), rawPtr(d.devData.m), rawPtr(d.devData.kx),
                          rawPtr(d.devData.xm), rawPtr(d.devData.gradh), rawPtr(d.devData.prho), rawPtr(d.devData.c),
-                         rawPtr(d.devData.rho), rawPtr(d.devData.p), box);
+                         rawPtr(d.devData.rho), rawPtr(d.devData.p), box, firstIter);
     }
     else { computeEOS_Impl(startIndex, endIndex, d, box); }
 }

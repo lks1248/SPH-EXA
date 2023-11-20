@@ -46,7 +46,7 @@ template<class Tt, class Tm, class Thydro>
 __global__ void cudaEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, const Thydro* h, const Tt* x,
                         const Tt* y, const Tt* z, const Thydro* vx, const Thydro* vy, const Thydro* vz, const Tt* temp,
                         const Tm* m, const Thydro* kx, const Thydro* xm, const Thydro* gradh, Thydro* prho, Thydro* c,
-                        Thydro* rho, Thydro* p, const cstone::Box<Tt> box)
+                        Thydro* rho, Thydro* p, const cstone::Box<Tt> box, bool firstIter)
 {
 
     cstone::LocalIndex i = firstParticle + blockDim.x * blockIdx.x + threadIdx.x;
@@ -57,7 +57,7 @@ __global__ void cudaEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt ga
     bool fbcZ   = (box.boundaryZ() == cstone::BoundaryType::fixed);
     bool anyFBC = fbcX || fbcY || fbcZ;
 
-    if (anyFBC && vx[i] == Thydro(0) && vy[i] == Thydro(0) && vz[i] == Thydro(0))
+    if (!firstIter && anyFBC && vx[i] == Thydro(0) && vy[i] == Thydro(0) && vz[i] == Thydro(0))
     {
         if (fbcCheck(x[i], h[i], box.xmax(), box.xmin(), fbcX) || fbcCheck(y[i], h[i], box.ymax(), box.ymin(), fbcY) ||
             fbcCheck(z[i], h[i], box.zmax(), box.zmin(), fbcZ))
@@ -78,12 +78,12 @@ template<class Tt, class Tm, class Thydro>
 void computeEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, const Thydro* h, const Tt* x, const Tt* y,
                 const Tt* z, const Thydro* vx, const Thydro* vy, const Thydro* vz, const Tt* temp, const Tm* m,
                 const Thydro* kx, const Thydro* xm, const Thydro* gradh, Thydro* prho, Thydro* c, Thydro* rho,
-                Thydro* p, const cstone::Box<Tt>& box)
+                Thydro* p, const cstone::Box<Tt>& box, bool firstIter)
 {
     unsigned numThreads = 256;
     unsigned numBlocks  = cstone::iceil(lastParticle - firstParticle, numThreads);
     cudaEOS<<<numBlocks, numThreads>>>(firstParticle, lastParticle, mui, gamma, h, x, y, z, vx, vy, vz, temp, m, kx, xm,
-                                       gradh, prho, c, rho, p, box);
+                                       gradh, prho, c, rho, p, box, firstIter);
     checkGpuErrors(cudaDeviceSynchronize());
 }
 
