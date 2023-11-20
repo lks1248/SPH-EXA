@@ -92,7 +92,7 @@ void computeEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, con
                              const Tt* x, const Tt* y, const Tt* z, const Thydro* vx, const Thydro* vy,                \
                              const Thydro* vz, const Tt* temp, const Tm* m, const Thydro* kx, const Thydro* xm,        \
                              const Thydro* gradh, Thydro* prho, Thydro* c, Thydro* rho, Thydro* p,                     \
-                             const cstone::Box<Tt>& box)
+                             const cstone::Box<Tt>& box, bool firstIter)
 
 COMPUTE_EOS(double, double, double);
 COMPUTE_EOS(double, float, double);
