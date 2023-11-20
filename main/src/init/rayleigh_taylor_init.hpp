@@ -55,6 +55,8 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     T gamma         = constants.at("gamma");
     T p0            = rhoUp / gamma;
     T y0            = constants.at("y0");
+    T ymax          = constants.at("ySize");
+    T ymin          = 0.0;
     T g             = 0.5;
 
     size_t ng0   = 100;
@@ -68,6 +70,9 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     std::fill(d.alpha.begin(), d.alpha.end(), d.alphamax);
     std::fill(d.vx.begin(), d.vx.end(), 0.0);
     std::fill(d.vz.begin(), d.vz.end(), 0.0);
+    std::fill(d.x_m1.begin(), d.x_m1.end(), 0.0);
+    std::fill(d.y_m1.begin(), d.y_m1.end(), 0.0);
+
 
     d.minDt    = firstTimeStep;
     d.minDt_m1 = firstTimeStep;
@@ -82,24 +87,27 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
 
         if (d.y[i] < y0)
         {
-            T p = p0 - rhoDown * (d.y[i] - y0) * g;
-            T u = p / (rhoDown * (gamma - 1.));
+            // to initialize fixed boundary particles to sensible values
+            T y_init = std::max(d.y[i], ymin);
+            T p      = p0 - rhoDown * (y_init - y0) * g;
+            T u      = p / (rhoDown * (gamma - 1.));
 
             d.h[i]    = hDown;
             d.temp[i] = u / cv;
         }
         else
         {
-            T p = p0 - rhoUp * (d.y[i] - y0) * g;
+            // to initialize fixed boundary particles to sensible values
+            T y_init = std::min(d.y[i], ymax);
+            T p = p0 - rhoUp * (y_init - y0) * g;
             T u = p / (rhoUp * (gamma - 1.));
 
             d.h[i]    = hUp;
             d.temp[i] = u / cv;
         }
 
-        d.x_m1[i] = d.vx[i] * firstTimeStep;
         d.y_m1[i] = d.vy[i] * firstTimeStep;
-        d.z_m1[i] = d.vz[i] * firstTimeStep;
+
     }
 }
 
@@ -127,9 +135,9 @@ std::vector<T> createSmoothingLength(Dataset& d, std::map<std::string, double>& 
 
 std::map<std::string, double> RayleighTaylorConstants()
 {
-    return {{"rhoUp", 2.},  {"rhoDown", 1.},    {"gamma", 1.4},   {"firstTimeStep", 1e-6},
-            {"y0", 0.75},   {"omega0", 0.0025}, {"ay0", -0.5},    {"blockSize", 0.0625},
-            {"xSize", 0.5}, {"ySize", 1.5},     {"zSize", 0.0625}, {"fbcThickness",8.}};
+    return {{"rhoUp", 2.},  {"rhoDown", 1.},    {"gamma", 1.4},    {"firstTimeStep", 1e-6},
+            {"y0", 0.75},   {"omega0", 0.0025}, {"ay0", -0.5},     {"blockSize", 0.0625},
+            {"xSize", 0.5}, {"ySize", 1.5},     {"zSize", 0.0625}, {"fbcThickness", 8.}};
 }
 
 template<class Dataset>
@@ -162,10 +170,10 @@ public:
 
         T rhoUp = settings_.at("rhoUp");
 
-        T blockSize = settings_.at("blockSize");
-        T xSize     = settings_.at("xSize");
-        T ySize     = settings_.at("ySize");
-        T zSize     = settings_.at("zSize");
+        T blockSize    = settings_.at("blockSize");
+        T xSize        = settings_.at("xSize");
+        T ySize        = settings_.at("ySize");
+        T zSize        = settings_.at("zSize");
         T fbcThickness = settings_.at("fbcThickness");
 
         int xBlocks = xSize / blockSize;
@@ -179,7 +187,7 @@ public:
         readTemplateBlock(glassBlock, reader, xBlock, yBlock, zBlock);
 
         cstone::Box<T> initBox(0, xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic,
-                                 cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
+                               cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
 
         unsigned level             = cstone::log8ceil<KeyType>(100 * numRanks);
         auto     initialBoundaries = cstone::initialDomainSplits<KeyType>(numRanks, level);
@@ -217,13 +225,12 @@ public:
         settings_["numParticlesGlobal"] = double(numParticlesGlobal);
         BuiltinWriter attributeSetter(settings_);
         d.loadOrStoreAttributes(&attributeSetter);
-
         initRayleighTaylorFields(d, settings_, particleMass);
         initFixedBoundaries(d.y.data(), d.vx.data(), d.vy.data(), d.vz.data(), d.h.data(), initBox.ymax(),
                             initBox.ymin(), d.x.size(), fbcThickness);
 
-        T newYMin = *std::min_element(d.y.begin(), d.y.end());
-        T newYMax = *std::max_element(d.y.begin(), d.y.end());
+        T              newYMin = *std::min_element(d.y.begin(), d.y.end());
+        T              newYMax = *std::max_element(d.y.begin(), d.y.end());
         cstone::Box<T> globalBox(0, xSize, newYMin, newYMax, 0, zSize, cstone::BoundaryType::periodic,
                                  cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
         return globalBox;
