@@ -83,7 +83,7 @@ public:
        transferToHost(d, first, last, "ay");
        artificialGravity(first, last, d.ay.data());
        timer.step("ArtificialGravity");
-       transferToDevice(d, first, last, "ay");
+       transferToDevice(d, first, last, {"ay"});
 
        computePositions(first, last, d, domain.box());
        timer.step("UpdateQuantities");
