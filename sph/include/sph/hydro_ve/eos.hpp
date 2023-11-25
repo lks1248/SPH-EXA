@@ -74,7 +74,7 @@ void computeEOS_Impl(size_t startIndex, size_t endIndex, Dataset& d, const cston
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; ++i)
     {
-        if (!firstIter && anyFBC && d.vx[i] == T(0) && d.vy[i] == T(0) && d.vz[i] == T(0))
+/*        if (!firstIter && anyFBC && d.vx[i] == T(0) && d.vy[i] == T(0) && d.vz[i] == T(0))
         {
             if (fbcCheck(d.x[i], d.h[i], box.xmax(), box.xmin(), fbcX) ||
                 fbcCheck(d.y[i], d.h[i], box.ymax(), box.ymin(), fbcY) ||
@@ -82,7 +82,7 @@ void computeEOS_Impl(size_t startIndex, size_t endIndex, Dataset& d, const cston
             {
                 continue;
             }
-        }
+        }*/
 
         auto rho      = kx[i] * m[i] / xm[i];
         auto [pi, ci] = idealGasEOS(temp[i], rho, d.muiConst, d.gamma);

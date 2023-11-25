@@ -57,14 +57,14 @@ __global__ void cudaEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt ga
     bool fbcZ   = (box.boundaryZ() == cstone::BoundaryType::fixed);
     bool anyFBC = fbcX || fbcY || fbcZ;
 
-    if (!firstIter && anyFBC && vx[i] == Thydro(0) && vy[i] == Thydro(0) && vz[i] == Thydro(0))
+/*    if (!firstIter && anyFBC && vx[i] == Thydro(0) && vy[i] == Thydro(0) && vz[i] == Thydro(0))
     {
         if (fbcCheck(x[i], h[i], box.xmax(), box.xmin(), fbcX) || fbcCheck(y[i], h[i], box.ymax(), box.ymin(), fbcY) ||
             fbcCheck(z[i], h[i], box.zmax(), box.zmin(), fbcZ))
         {
             return;
         }
-    }
+    }*/
 
     Thydro p_i;
     Thydro rho_i         = kx[i] * m[i] / xm[i];
