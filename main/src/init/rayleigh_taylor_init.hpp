@@ -53,7 +53,7 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     T firstTimeStep = constants.at("firstTimeStep");
     T omega0        = constants.at("omega0");
     T gamma         = constants.at("gamma");
-    T p0            = rhoUp / gamma;
+    T p0            = constants.at("p0");
     T y0            = constants.at("y0");
     T ymax          = constants.at("ySize");
     T ymin          = 0.0;
@@ -72,7 +72,6 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     std::fill(d.vz.begin(), d.vz.end(), 0.0);
     std::fill(d.x_m1.begin(), d.x_m1.end(), 0.0);
     std::fill(d.y_m1.begin(), d.y_m1.end(), 0.0);
-
 
     d.minDt    = firstTimeStep;
     d.minDt_m1 = firstTimeStep;
@@ -99,15 +98,14 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
         {
             // to initialize fixed boundary particles to sensible values
             T y_init = std::min(d.y[i], ymax);
-            T p = p0 - rhoUp * (y_init - y0) * g;
-            T u = p / (rhoUp * (gamma - 1.));
+            T p      = p0 - rhoUp * (y_init - y0) * g;
+            T u      = p / (rhoUp * (gamma - 1.));
 
             d.h[i]    = hUp;
             d.temp[i] = u / cv;
         }
 
         d.y_m1[i] = d.vy[i] * firstTimeStep;
-
     }
 }
 
@@ -137,7 +135,8 @@ std::map<std::string, double> RayleighTaylorConstants()
 {
     return {{"rhoUp", 2.},  {"rhoDown", 1.},    {"gamma", 1.4},    {"firstTimeStep", 1e-6},
             {"y0", 0.75},   {"omega0", 0.0025}, {"ay0", -0.5},     {"blockSize", 0.0625},
-            {"xSize", 0.5}, {"ySize", 1.5},     {"zSize", 0.0625}, {"fbcThickness", 8.}};
+            {"xSize", 0.5}, {"ySize", 1.5},     {"zSize", 0.0625}, {"fbcThickness", 8.},
+            {"p0", 2.5}};
 }
 
 template<class Dataset>
@@ -234,7 +233,6 @@ public:
         initRayleighTaylorFields(d, settings_, particleMass);
         initFixedBoundaries(d.y.data(), d.vx.data(), d.vy.data(), d.vz.data(), d.h.data(), globalBox.ymax(),
                             globalBox.ymin(), d.x.size(), fbcThickness);
-
 
         return globalBox;
     }
