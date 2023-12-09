@@ -45,9 +45,9 @@ namespace sph
 
 //! @brief checks whether a particle is in the fixed boundary region in one dimension
 template<class Tc, class Th, class Tb>
-HOST_DEVICE_FUN bool fbcCheck(Tc coord, Th h, Tb top, Tb bottom, bool fbc)
+HOST_DEVICE_FUN bool fbcCheck(Tc coord, Th h, Tb top, Tb bottom, bool fbc, int fbcThickness)
 {
-    return fbc && (std::abs(top - coord) < Th(16) * h || std::abs(bottom - coord) < Th(16) * h);
+    return fbc && (std::abs(top - coord) < 2.0 * fbcThickness * h || std::abs(bottom - coord) < 2.0 * fbcThickness * h);
 }
 
 //! @brief update the energy according to Adams-Bashforth (2nd order)
@@ -85,16 +85,17 @@ void updatePositionsHost(size_t startIndex, size_t endIndex, Dataset& d, const c
     bool fbcY = (box.boundaryY() == cstone::BoundaryType::fixed);
     bool fbcZ = (box.boundaryZ() == cstone::BoundaryType::fixed);
 
-    bool anyFBC = fbcX || fbcY || fbcZ;
+    bool anyFBC       = fbcX || fbcY || fbcZ;
+    int  fbcThickness = box.fbcThickness();
 
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; i++)
     {
         if (anyFBC && d.vx[i] == T(0) && d.vy[i] == T(0) && d.vz[i] == T(0))
         {
-            if (fbcCheck(d.x[i], d.h[i], box.xmax(), box.xmin(), fbcX) ||
-                fbcCheck(d.y[i], d.h[i], box.ymax(), box.ymin(), fbcY) ||
-                fbcCheck(d.z[i], d.h[i], box.zmax(), box.zmin(), fbcZ))
+            if (fbcCheck(d.x[i], d.h[i], box.xmax(), box.xmin(), fbcX, fbcThickness) ||
+                fbcCheck(d.y[i], d.h[i], box.ymax(), box.ymin(), fbcY, fbcThickness) ||
+                fbcCheck(d.z[i], d.h[i], box.zmax(), box.zmin(), fbcZ, fbcThickness))
             {
                 continue;
             }
@@ -115,23 +116,24 @@ void updatePositionsHost(size_t startIndex, size_t endIndex, Dataset& d, const c
 template<class Dataset, class T>
 void updateTempHost(size_t startIndex, size_t endIndex, Dataset& d, const cstone::Box<T>& box)
 {
+    bool haveMui = !d.mui.empty();
+    auto constCv = idealGasCv(d.muiConst, d.gamma);
+
     bool fbcX = (box.boundaryX() == cstone::BoundaryType::fixed);
     bool fbcY = (box.boundaryY() == cstone::BoundaryType::fixed);
     bool fbcZ = (box.boundaryZ() == cstone::BoundaryType::fixed);
 
-    bool anyFBC = fbcX || fbcY || fbcZ;
-
-    bool haveMui = !d.mui.empty();
-    auto constCv = idealGasCv(d.muiConst, d.gamma);
+    bool anyFBC       = fbcX || fbcY || fbcZ;
+    int  fbcThickness = box.fbcThickness();
 
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; i++)
     {
         if (anyFBC && d.vx[i] == T(0) && d.vy[i] == T(0) && d.vz[i] == T(0))
         {
-            if (fbcCheck(d.x[i], d.h[i], box.xmax(), box.xmin(), fbcX) ||
-                fbcCheck(d.y[i], d.h[i], box.ymax(), box.ymin(), fbcY) ||
-                fbcCheck(d.z[i], d.h[i], box.zmax(), box.zmin(), fbcZ))
+            if (fbcCheck(d.x[i], d.h[i], box.xmax(), box.xmin(), fbcX, fbcThickness) ||
+                fbcCheck(d.y[i], d.h[i], box.ymax(), box.ymin(), fbcY, fbcThickness) ||
+                fbcCheck(d.z[i], d.h[i], box.zmax(), box.zmin(), fbcZ, fbcThickness))
             {
                 continue;
             }
@@ -150,16 +152,17 @@ void updateIntEnergyHost(size_t startIndex, size_t endIndex, Dataset& d, const c
     bool fbcY = (box.boundaryY() == cstone::BoundaryType::fixed);
     bool fbcZ = (box.boundaryZ() == cstone::BoundaryType::fixed);
 
-    bool anyFBC = fbcX || fbcY || fbcZ;
+    bool anyFBC       = fbcX || fbcY || fbcZ;
+    int  fbcThickness = box.fbcThickness();
 
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; i++)
     {
         if (anyFBC && d.vx[i] == T(0) && d.vy[i] == T(0) && d.vz[i] == T(0))
         {
-            if (fbcCheck(d.x[i], d.h[i], box.xmax(), box.xmin(), fbcX) ||
-                fbcCheck(d.y[i], d.h[i], box.ymax(), box.ymin(), fbcY) ||
-                fbcCheck(d.z[i], d.h[i], box.zmax(), box.zmin(), fbcZ))
+            if (fbcCheck(d.x[i], d.h[i], box.xmax(), box.xmin(), fbcX, fbcThickness) ||
+                fbcCheck(d.y[i], d.h[i], box.ymax(), box.ymin(), fbcY, fbcThickness) ||
+                fbcCheck(d.z[i], d.h[i], box.zmax(), box.zmin(), fbcZ, fbcThickness))
             {
                 continue;
             }
