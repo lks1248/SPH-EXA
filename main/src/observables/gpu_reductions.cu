@@ -189,20 +189,21 @@ struct MarkRampCond
         T  y        = get<1>(p);
         T  vy       = get<2>(p);
         Tm markRamp = get<3>(p);
-        if (markRamp > 0.05 && !sph::fbcCheck(y, 2.0 * h, ymax, ymin, (bool)true))
+        if (markRamp > 0.05 && !sph::fbcCheck(y, 2.0 * h, ymax, ymin, true, fbcThickness))
         {
             thrust::get<4>(p) = {y, vy};
             thrust::get<5>(p) = {y, vy};
         }
     }
-    Tc ymin;
-    Tc ymax;
+    Tc  ymin;
+    Tc  ymax;
+    int fbcThickness;
 };
 
 template<class T, class Tc, class Th>
 std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size_t first, size_t last, Tc ymin, Tc ymax,
-                                                                            const Th* h, const T* y, const Th* vy,
-                                                                            const Th* markRamp)
+                                                                            int fbcThickness, const Th* h, const T* y,
+                                                                            const Th* vy, const Th* markRamp)
 {
     thrust::device_vector<AuxT<T>> targetUp(last - first);
     thrust::device_vector<AuxT<T>> targetDown(last - first);
@@ -212,7 +213,7 @@ std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size
     auto it2 = thrust::make_zip_iterator(
         thrust::make_tuple(h + last, y + last, vy + last, markRamp + last, targetUp.end(), targetDown.end()));
 
-    thrust::for_each(thrust::device, it1, it2, MarkRampCond<T, Tc, Th>{ymin, ymax});
+    thrust::for_each(thrust::device, it1, it2, MarkRampCond<T, Tc, Th>{ymin, ymax, fbcThickness});
 
     auto endUp   = thrust::remove_if(thrust::device, targetUp.begin(), targetUp.end(), invalidAuxTEntry<T>());
     auto endDown = thrust::remove_if(thrust::device, targetDown.begin(), targetDown.end(), invalidAuxTEntry<T>());
@@ -233,7 +234,8 @@ std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size
 
 #define RTGROWTH(T, Tc, Th)                                                                                            \
     template std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(                              \
-        size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y, const Th* vy, const Th* markRamp);
+        size_t first, size_t last, Tc ymin, Tc ymax, int fbcThickness, const Th* h, const T* y, const Th* vy,           \
+        const Th* markRamp);
 
 RTGROWTH(double, double, double);
 RTGROWTH(double, float, double);

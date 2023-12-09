@@ -62,8 +62,8 @@ namespace sphexa
  */
 template<class T, class Th, class Tc>
 std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
-localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, const Th* h, const T* y, const Th* vy,
-                            const Th* markRamp)
+localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, int fbcThickness, const Th* h,
+                            const T* y, const Th* vy, const Th* markRamp)
 {
     std::vector<AuxT<T>> localUp(endIndex - startIndex);
     std::vector<AuxT<T>> localDown(endIndex - startIndex);
@@ -72,7 +72,7 @@ localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax
     for (size_t i = startIndex; i < endIndex; i++)
     {
 
-        if (markRamp[i] > 0.05 && !sph::fbcCheck(y[i], 2.0 * h[i], ymax, ymin, true))
+        if (markRamp[i] > 0.05 && !sph::fbcCheck(y[i], 2.0 * h[i], ymax, ymin, true, fbcThickness))
         {
             localUp[i - startIndex]   = {y[i], vy[i]};
             localDown[i - startIndex] = {y[i], vy[i]};
@@ -105,17 +105,18 @@ template<typename T, class Dataset>
 util::tuple<T, T, T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, MPI_Comm comm,
                                                       const cstone::Box<T>& box)
 {
+    int                                                    fbcThickness = box.fbcThickness();
     std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localRet;
     if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
     {
         std::tie(std::get<0>(localRet), std::get<1>(localRet)) =
-            localGrowthRateRTGpu(startIndex, endIndex, box.ymin(), box.ymax(), rawPtr(d.devData.h), rawPtr(d.devData.y),
-                                 rawPtr(d.devData.vy), rawPtr(d.devData.markRamp));
+            localGrowthRateRTGpu(startIndex, endIndex, box.ymin(), box.ymax(), fbcThickness, rawPtr(d.devData.h),
+                                 rawPtr(d.devData.y), rawPtr(d.devData.vy), rawPtr(d.devData.markRamp));
     }
     else
     {
-        localRet = localVelocitiesRTGrowthRate(startIndex, endIndex, box.ymin(), box.ymax(), d.h.data(), d.y.data(),
-                                               d.vy.data(), d.markRamp.data());
+        localRet = localVelocitiesRTGrowthRate(startIndex, endIndex, box.ymin(), box.ymax(), fbcThickness, d.h.data(),
+                                               d.y.data(), d.vy.data(), d.markRamp.data());
     }
 
     std::vector<AuxT<T>> localUp   = util::get<0>(localRet);
@@ -175,14 +176,14 @@ class TimeVelocitiesGrowthRT : public IObservables<Dataset>
     std::ostream& constantsFile;
 
 public:
-    TimeVelocitiesGrowthRT(std::ostream& constPath)
+    explicit TimeVelocitiesGrowthRT(std::ostream& constPath)
         : constantsFile(constPath)
     {
     }
 
     using T = typename Dataset::RealType;
 
-    void computeAndWrite(Dataset& simData, size_t firstIndex, size_t lastIndex, cstone::Box<T>& box)
+    void computeAndWrite(Dataset& simData, size_t firstIndex, size_t lastIndex, const cstone::Box<T>& box) override
     {
         int rank;
         MPI_Comm_rank(simData.comm, &rank);

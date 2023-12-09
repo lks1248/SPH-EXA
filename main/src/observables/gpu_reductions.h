@@ -123,7 +123,7 @@ struct invalidAuxTEntry
     template<class AuxT>
     HOST_DEVICE_FUN bool operator()(const AuxT a) const
     {
-        return a.pos == T(1.0/0.0);
+        return std::isinf(a.pos);
     }
 };
 /*!
@@ -141,6 +141,6 @@ struct invalidAuxTEntry
  */
 template<class T, class Tc, class Th>
 extern std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size_t first, size_t last, Tc ymin,
-                                                                                   Tc ymax, const Th* h, const T* y,
+                                                                                   Tc ymax, int, const Th* h, const T* y,
                                                                                    const Th* vy, const Th* markRamp);
 } // namespace sphexa
