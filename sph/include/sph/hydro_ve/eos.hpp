@@ -49,8 +49,8 @@ namespace sph
  * also for halos, not just assigned particles in [startIndex:endIndex], so that
  * we could potentially avoid halo exchange of p and c in return for exchanging halos of u.
  */
-template<typename Dataset, class T>
-void computeEOS_Impl(size_t startIndex, size_t endIndex, Dataset& d, const cstone::Box<T>& box)
+template<typename Dataset>
+void computeEOS_Impl(size_t startIndex, size_t endIndex, Dataset& d)
 {
     const auto* temp  = d.temp.data();
     const auto* m     = d.m.data();
@@ -64,26 +64,9 @@ void computeEOS_Impl(size_t startIndex, size_t endIndex, Dataset& d, const cston
     bool storeRho = (d.rho.size() == d.m.size());
     bool storeP   = (d.p.size() == d.m.size());
 
-    bool fbcX = (box.boundaryX() == cstone::BoundaryType::fixed);
-    bool fbcY = (box.boundaryY() == cstone::BoundaryType::fixed);
-    bool fbcZ = (box.boundaryZ() == cstone::BoundaryType::fixed);
-
-    bool anyFBC    = fbcX || fbcY || fbcZ;
-    bool firstIter = d.iteration == 1;
-
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; ++i)
     {
-/*        if (!firstIter && anyFBC && d.vx[i] == T(0) && d.vy[i] == T(0) && d.vz[i] == T(0))
-        {
-            if (fbcCheck(d.x[i], d.h[i], box.xmax(), box.xmin(), fbcX) ||
-                fbcCheck(d.y[i], d.h[i], box.ymax(), box.ymin(), fbcY) ||
-                fbcCheck(d.z[i], d.h[i], box.zmax(), box.zmin(), fbcZ))
-            {
-                continue;
-            }
-        }*/
-
         auto rho      = kx[i] * m[i] / xm[i];
         auto [pi, ci] = idealGasEOS(temp[i], rho, d.muiConst, d.gamma);
         prho[i]       = pi / (kx[i] * m[i] * m[i] * gradh[i]);
@@ -93,19 +76,16 @@ void computeEOS_Impl(size_t startIndex, size_t endIndex, Dataset& d, const cston
     }
 }
 
-template<class Dataset, class T>
-void computeEOS(size_t startIndex, size_t endIndex, Dataset& d, const cstone::Box<T>& box)
+template<class Dataset>
+void computeEOS(size_t startIndex, size_t endIndex, Dataset& d)
 {
     if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
     {
-        bool firstIter = d.iteration == 1;
-        cuda::computeEOS(startIndex, endIndex, d.muiConst, d.gamma, rawPtr(d.devData.h), rawPtr(d.devData.x),
-                         rawPtr(d.devData.y), rawPtr(d.devData.z), rawPtr(d.devData.vx), rawPtr(d.devData.vy),
-                         rawPtr(d.devData.vz), rawPtr(d.devData.temp), rawPtr(d.devData.m), rawPtr(d.devData.kx),
-                         rawPtr(d.devData.xm), rawPtr(d.devData.gradh), rawPtr(d.devData.prho), rawPtr(d.devData.c),
-                         rawPtr(d.devData.rho), rawPtr(d.devData.p), box, firstIter);
+        cuda::computeEOS(startIndex, endIndex, d.muiConst, d.gamma, rawPtr(d.devData.temp), rawPtr(d.devData.m),
+                         rawPtr(d.devData.kx), rawPtr(d.devData.xm), rawPtr(d.devData.gradh), rawPtr(d.devData.prho),
+                         rawPtr(d.devData.c), rawPtr(d.devData.rho), rawPtr(d.devData.p));
     }
-    else { computeEOS_Impl(startIndex, endIndex, d, box); }
+    else { computeEOS_Impl(startIndex, endIndex, d); }
 }
 
 } // namespace sph

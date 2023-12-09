@@ -35,7 +35,6 @@
 
 #include "sph/sph_gpu.hpp"
 #include "sph/eos.hpp"
-#include "sph/positions.hpp"
 
 namespace sph
 {
@@ -43,28 +42,12 @@ namespace cuda
 {
 
 template<class Tt, class Tm, class Thydro>
-__global__ void cudaEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, const Thydro* h, const Tt* x,
-                        const Tt* y, const Tt* z, const Thydro* vx, const Thydro* vy, const Thydro* vz, const Tt* temp,
-                        const Tm* m, const Thydro* kx, const Thydro* xm, const Thydro* gradh, Thydro* prho, Thydro* c,
-                        Thydro* rho, Thydro* p, const cstone::Box<Tt> box, bool firstIter)
+__global__ void cudaEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, const Tt* temp, const Tm* m,
+                        const Thydro* kx, const Thydro* xm, const Thydro* gradh, Thydro* prho, Thydro* c, Thydro* rho,
+                        Thydro* p)
 {
-
-    cstone::LocalIndex i = firstParticle + blockDim.x * blockIdx.x + threadIdx.x;
+    unsigned i = firstParticle + blockDim.x * blockIdx.x + threadIdx.x;
     if (i >= lastParticle) return;
-
-    bool fbcX   = (box.boundaryX() == cstone::BoundaryType::fixed);
-    bool fbcY   = (box.boundaryY() == cstone::BoundaryType::fixed);
-    bool fbcZ   = (box.boundaryZ() == cstone::BoundaryType::fixed);
-    bool anyFBC = fbcX || fbcY || fbcZ;
-
-/*    if (!firstIter && anyFBC && vx[i] == Thydro(0) && vy[i] == Thydro(0) && vz[i] == Thydro(0))
-    {
-        if (fbcCheck(x[i], h[i], box.xmax(), box.xmin(), fbcX) || fbcCheck(y[i], h[i], box.ymax(), box.ymin(), fbcY) ||
-            fbcCheck(z[i], h[i], box.zmax(), box.zmin(), fbcZ))
-        {
-            return;
-        }
-    }*/
 
     Thydro p_i;
     Thydro rho_i         = kx[i] * m[i] / xm[i];
@@ -75,24 +58,21 @@ __global__ void cudaEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt ga
 }
 
 template<class Tt, class Tm, class Thydro>
-void computeEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, const Thydro* h, const Tt* x, const Tt* y,
-                const Tt* z, const Thydro* vx, const Thydro* vy, const Thydro* vz, const Tt* temp, const Tm* m,
+void computeEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, const Tt* temp, const Tm* m,
                 const Thydro* kx, const Thydro* xm, const Thydro* gradh, Thydro* prho, Thydro* c, Thydro* rho,
-                Thydro* p, const cstone::Box<Tt>& box, bool firstIter)
+                Thydro* p)
 {
     unsigned numThreads = 256;
     unsigned numBlocks  = cstone::iceil(lastParticle - firstParticle, numThreads);
-    cudaEOS<<<numBlocks, numThreads>>>(firstParticle, lastParticle, mui, gamma, h, x, y, z, vx, vy, vz, temp, m, kx, xm,
-                                       gradh, prho, c, rho, p, box, firstIter);
+    cudaEOS<<<numBlocks, numThreads>>>(firstParticle, lastParticle, mui, gamma, temp, m, kx, xm, gradh, prho, c, rho,
+                                       p);
     checkGpuErrors(cudaDeviceSynchronize());
 }
 
-#define COMPUTE_EOS(Tt, Tm, Thydro)                                                                                    \
-    template void computeEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, const Thydro* h,             \
-                             const Tt* x, const Tt* y, const Tt* z, const Thydro* vx, const Thydro* vy,                \
-                             const Thydro* vz, const Tt* temp, const Tm* m, const Thydro* kx, const Thydro* xm,        \
-                             const Thydro* gradh, Thydro* prho, Thydro* c, Thydro* rho, Thydro* p,                     \
-                             const cstone::Box<Tt>& box, bool firstIter)
+#define COMPUTE_EOS(Ttemp, Tm, Thydro)                                                                                 \
+    template void computeEOS(size_t firstParticle, size_t lastParticle, Tm mui, Ttemp gamma, const Ttemp* temp,        \
+                             const Tm* m, const Thydro* kx, const Thydro* xm, const Thydro* gradh, Thydro* prho,       \
+                             Thydro* c, Thydro* rho, Thydro* p)
 
 COMPUTE_EOS(double, double, double);
 COMPUTE_EOS(double, float, double);

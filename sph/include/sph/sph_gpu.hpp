@@ -40,9 +40,8 @@ template<class Tu, class Trho, class Tp, class Tc>
 extern void computeEOS_HydroStd(size_t, size_t, Trho, Tu, const Tu*, const Trho*, Tp*, Tc*);
 
 template<class Tu, class Tm, class Thydro>
-extern void computeEOS(size_t, size_t, Tm mui, Tu gamma, const Thydro*, const Tu*, const Tu*, const Tu*, const Thydro*,
-                       const Thydro*, const Thydro*, const Tu*, const Tm*, const Thydro*, const Thydro*, const Thydro*,
-                       Thydro*, Thydro*, Thydro*, Thydro*, const cstone::Box<Tu>&, bool);
+extern void computeEOS(size_t, size_t, Tm mui, Tu gamma, const Tu*, const Tm*, const Thydro*, const Thydro*,
+                       const Thydro*, Thydro*, Thydro*, Thydro*, Thydro*);
 
 template<class Dataset>
 extern void computeMarkRamp(size_t, size_t, Dataset& d, const cstone::Box<typename Dataset::RealType>&);
