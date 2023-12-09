@@ -85,7 +85,7 @@ std::unique_ptr<ISimInitializer<Dataset>> initializerFactory(std::string testCas
     if (testNamedBase == "RT")
     {
         if (glassBlock.empty()) { throw std::runtime_error("need a valid glass block for Rayleigh-Taylor test\n"); }
-        else { return SimInitializers<Dataset>::RayleighTaylorGlass(glassBlock, settingsFile, reader); }
+        else { return SimInitializers<Dataset>::makeRayleighTaylor(glassBlock, settingsFile, reader); }
     }
     if (testCase == "evrard-cooling")
     {

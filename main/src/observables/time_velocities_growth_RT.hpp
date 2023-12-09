@@ -172,10 +172,10 @@ util::tuple<T, T, T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t 
 template<class Dataset>
 class TimeVelocitiesGrowthRT : public IObservables<Dataset>
 {
-    std::ofstream& constantsFile;
+    std::ostream& constantsFile;
 
 public:
-    TimeVelocitiesGrowthRT(std::ofstream& constPath)
+    TimeVelocitiesGrowthRT(std::ostream& constPath)
         : constantsFile(constPath)
     {
     }
