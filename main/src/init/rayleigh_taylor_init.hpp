@@ -131,6 +131,15 @@ std::vector<T> createSmoothingLength(Dataset& d, std::map<std::string, double>& 
     return h;
 }
 
+template<class T>
+struct flipBlock
+{
+    void operator() (T& elem)
+    {
+        elem = (elem - 0.5) * (-1.0) + 0.5;
+    }
+};
+
 std::map<std::string, double> RayleighTaylorConstants()
 {
     return {{"rhoUp", 2.},  {"rhoDown", 1.},    {"gamma", 1.4},    {"firstTimeStep", 1e-6},
@@ -184,6 +193,10 @@ public:
 
         std::vector<T> xBlock, yBlock, zBlock;
         readTemplateBlock(glassBlock, reader, xBlock, yBlock, zBlock);
+
+        std::for_each(xBlock.begin(), xBlock.end(), flipBlock<T>{});
+        std::for_each(yBlock.begin(), yBlock.end(), flipBlock<T>{});
+        std::for_each(zBlock.begin(), zBlock.end(), flipBlock<T>{});
 
         cstone::Box<T> initBox(0, xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic,
                                cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
