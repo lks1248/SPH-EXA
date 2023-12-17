@@ -95,7 +95,7 @@ extern size_t survivorsGpu(const Tt* temp, const T* kx, const T* xmass, const Tm
 template<class T>
 struct AuxT
 {
-    T pos = T(1.0/0.0);
+    T pos = T(0.0/0.0);
     T vel;
 };
 
@@ -123,7 +123,7 @@ struct invalidAuxTEntry
     template<class AuxT>
     HOST_DEVICE_FUN bool operator()(const AuxT a) const
     {
-        return std::isinf(a.pos);
+        return !(a.pos == a.pos);
     }
 };
 /*!
