@@ -153,8 +153,11 @@ util::tuple<T, T, T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t 
 
     if (rank == 0)
     {
-        std::sort(globalUp.begin(), globalUp.end(), greaterRT());
-        std::sort(globalDown.begin(), globalDown.end(), lowerRT());
+        auto newUpEnd   = std::remove_if(globalUp.begin(), globalUp.end(), invalidAuxTEntry<T>());
+        auto newDownEnd = std::remove_if(globalDown.begin(), globalDown.end(), invalidAuxTEntry<T>());
+
+        std::sort(globalUp.begin(), newUpEnd, greaterRT());
+        std::sort(globalDown.begin(), newDownEnd, lowerRT());
 
         globalUp.resize(50);
         globalDown.resize(50);
