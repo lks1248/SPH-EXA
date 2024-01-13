@@ -33,7 +33,7 @@
 #pragma once
 
 #include "sph/sph_gpu.hpp"
-#include "additional_fields_kern.hpp"
+#include "sph/hydro_ve/additional_fields_kern.hpp"
 
 namespace sph
 {
@@ -67,6 +67,23 @@ void computeMarkRamp(size_t startIndex, size_t endIndex, Dataset& d, const cston
         cuda::computeMarkRamp(startIndex, endIndex, d, box);
     }
     else { computeMarkRampImpl(startIndex, endIndex, d); }
+}
+
+template<class T, class Dataset>
+void artificialGravity(size_t startIndex, size_t endIndex, Dataset& d, T grav)
+{
+    if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
+    {
+        cuda::artificialGravity(startIndex, endIndex, d, grav);
+    }
+    else
+    {
+#pragma omp parallel for schedule(static)
+        for (size_t i = startIndex; i < endIndex; i++)
+        {
+            d.ay[i] -= grav;
+        }
+    }
 }
 
 }; // namespace sph

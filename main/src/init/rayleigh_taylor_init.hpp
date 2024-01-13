@@ -57,7 +57,7 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     T y0            = constants.at("y0");
     T ymax          = constants.at("ySize");
     T ymin          = 0.0;
-    T g             = 0.5;
+    T g             = constants.at("gravityConstant");
 
     size_t ng0   = 100;
     T      hUp   = 0.5 * std::cbrt(3. * ng0 * massPart / 4. / M_PI / rhoUp);
@@ -145,7 +145,7 @@ std::map<std::string, double> RayleighTaylorConstants()
     return {{"rhoUp", 2.},  {"rhoDown", 1.},    {"gamma", 1.4},    {"firstTimeStep", 1e-6},
             {"y0", 0.75},   {"omega0", 0.0025}, {"ay0", -0.5},     {"blockSize", 0.0625},
             {"xSize", 0.5}, {"ySize", 1.5},     {"zSize", 0.0625}, {"fbcThickness", 8.},
-            {"p0", 2.5}, {"RT", 1.0}};
+            {"p0", 2.5}, {"RT", 1.0}, {"gravityConstant", 0.5}};
 }
 
 template<class Dataset>

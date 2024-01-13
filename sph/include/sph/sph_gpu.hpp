@@ -43,6 +43,9 @@ extern void computeEOS(size_t, size_t, Tm mui, Tu gamma, const Tu*, const Tm*, c
 template<class Dataset>
 extern void computeMarkRamp(size_t, size_t, Dataset& d, const cstone::Box<typename Dataset::RealType>&);
 
+template<class T, class Dataset>
+extern void artificialGravity(size_t, size_t, Dataset& d, T grav);
+
 } // namespace cuda
 
 template<class Tc, class Tv, class Ta, class Tdu, class Tm1, class Tu, class Thydro>

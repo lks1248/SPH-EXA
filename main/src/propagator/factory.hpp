@@ -73,9 +73,9 @@ propagatorFactory(const std::string& choice, bool avClean, std::ostream& output,
     {
         if (avClean)
         {
-            return std::make_unique<RTVeProp<true, DomainType, ParticleDataType>>(output, rank);
+            return std::make_unique<RTVeProp<true, DomainType, ParticleDataType>>(output, rank, s.at("gravityConstant"));
         }
-        else { return std::make_unique<RTVeProp<false, DomainType, ParticleDataType>>(output, rank); }
+        else { return std::make_unique<RTVeProp<false, DomainType, ParticleDataType>>(output, rank, s.at("gravityConstant")); }
     }
     else { throw std::runtime_error("Unknown propagator choice: " + choice); }
 }
