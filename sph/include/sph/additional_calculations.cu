@@ -34,6 +34,7 @@
 #include "cstone/traversal/find_neighbors.cuh"
 
 #include <thrust/functional.h>
+#include <thrust/execution_policy.h>
 
 #include "sph/sph_gpu.hpp"
 #include "sph/particles_data.hpp"
@@ -110,7 +111,7 @@ void artificialGravity(size_t first, size_t last, Dataset& d, T grav)
 {
     auto begin = rawPtr(d.devData.ay) + first;
     auto end = rawPtr(d.devData.ay) + last;
-    thrust::for_each(begin, end, thrust::placeholders::_1 -= grav);
+    thrust::for_each(thrust::device, begin, end, thrust::placeholders::_1 -= grav);
 }
 
 template void artificialGravity(size_t, size_t, sphexa::ParticlesData<cstone::GpuTag>& d, double);
