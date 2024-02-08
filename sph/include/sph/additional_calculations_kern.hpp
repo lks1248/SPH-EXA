@@ -30,7 +30,6 @@
  */
 
 #include "cstone/cuda/annotation.hpp"
-#include "cstone/sfc/box.hpp"
 
 namespace sph
 {

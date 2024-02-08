@@ -36,13 +36,11 @@
 #include <thrust/functional.h>
 #include <thrust/execution_policy.h>
 
-#include "sph/sph_gpu.hpp"
+#include "sph_gpu.hpp"
 #include "sph/particles_data.hpp"
-#include "additional_fields_kern.hpp"
+#include "additional_calculations_kern.hpp"
 
-namespace sph
-{
-namespace cuda
+namespace sph::cuda
 {
 
 using cstone::GpuConfig;
@@ -100,7 +98,8 @@ void computeMarkRamp(size_t first, size_t last, Dataset& d, const cstone::Box<ty
     checkGpuErrors(cudaDeviceSynchronize());
 }
 
-template void computeMarkRamp(size_t, size_t, sphexa::ParticlesData<cstone::GpuTag>& d, const cstone::Box<double>&);
+template void computeMarkRamp(size_t, size_t, sphexa::ParticlesData<cstone::GpuTag>& d,
+                              const cstone::Box<SphTypes::CoordinateType>&);
 
 /*!
  * @brief artificial gravity for the Rayleigh-Taylor test in form of constant acceleration
@@ -110,12 +109,11 @@ template<class T, class Dataset>
 void artificialGravity(size_t first, size_t last, Dataset& d, T grav)
 {
     auto begin = rawPtr(d.devData.ay) + first;
-    auto end = rawPtr(d.devData.ay) + last;
+    auto end   = rawPtr(d.devData.ay) + last;
     thrust::for_each(thrust::device, begin, end, thrust::placeholders::_1 -= grav);
 }
 
 template void artificialGravity(size_t, size_t, sphexa::ParticlesData<cstone::GpuTag>& d, double);
 template void artificialGravity(size_t, size_t, sphexa::ParticlesData<cstone::GpuTag>& d, float);
 
-} // namespace cuda
-} // namespace sph
+} // namespace sph::cuda
