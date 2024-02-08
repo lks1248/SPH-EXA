@@ -48,7 +48,7 @@ namespace sphexa
 using namespace sph;
 using cstone::FieldStates;
 
-//! @brief VE hydro propagator that adds turbulence stirring to the acceleration prior to position update
+//! @brief VE hydro propagator with artificial gravity for the Rayleigh-Taylor test case
 template<bool avClean, class DomainType, class DataType>
 class RTVeProp final : public HydroVeProp<avClean, DomainType, DataType>
 {

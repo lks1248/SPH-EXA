@@ -32,8 +32,8 @@
 
 #pragma once
 
-#include "sph/sph_gpu.hpp"
-#include "sph/hydro_ve/additional_fields_kern.hpp"
+//#include "sph/sph_gpu.hpp"
+#include "additional_fields_kern.hpp"
 
 namespace sph
 {
