@@ -47,7 +47,7 @@ __global__ void computePositionsKernel(size_t first, size_t last, double dt, dou
     bool fbcX         = (box.boundaryX() == cstone::BoundaryType::fixed);
     bool fbcY         = (box.boundaryY() == cstone::BoundaryType::fixed);
     bool fbcZ         = (box.boundaryZ() == cstone::BoundaryType::fixed);
-    bool anyFBC       = fbcX || fbcY || fbcZ;
+    bool anyFBC       = false;
     int  fbcThickness = box.fbcThickness();
 
     if (anyFBC && vx[i] == Tv(0) && vy[i] == Tv(0) && vz[i] == Tv(0))

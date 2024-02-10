@@ -85,7 +85,7 @@ void updatePositionsHost(size_t startIndex, size_t endIndex, Dataset& d, const c
     bool fbcY = (box.boundaryY() == cstone::BoundaryType::fixed);
     bool fbcZ = (box.boundaryZ() == cstone::BoundaryType::fixed);
 
-    bool anyFBC       = fbcX || fbcY || fbcZ;
+    bool anyFBC       = false;
     int  fbcThickness = box.fbcThickness();
 
 #pragma omp parallel for schedule(static)
@@ -123,7 +123,7 @@ void updateTempHost(size_t startIndex, size_t endIndex, Dataset& d, const cstone
     bool fbcY = (box.boundaryY() == cstone::BoundaryType::fixed);
     bool fbcZ = (box.boundaryZ() == cstone::BoundaryType::fixed);
 
-    bool anyFBC       = fbcX || fbcY || fbcZ;
+    bool anyFBC       = false;
     int  fbcThickness = box.fbcThickness();
 
 #pragma omp parallel for schedule(static)
@@ -152,7 +152,7 @@ void updateIntEnergyHost(size_t startIndex, size_t endIndex, Dataset& d, const c
     bool fbcY = (box.boundaryY() == cstone::BoundaryType::fixed);
     bool fbcZ = (box.boundaryZ() == cstone::BoundaryType::fixed);
 
-    bool anyFBC       = fbcX || fbcY || fbcZ;
+    bool anyFBC       = false;
     int  fbcThickness = box.fbcThickness();
 
 #pragma omp parallel for schedule(static)

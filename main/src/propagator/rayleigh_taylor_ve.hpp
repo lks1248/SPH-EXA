@@ -37,6 +37,7 @@
 
 #include "cstone/fields/field_get.hpp"
 #include "sph/sph.hpp"
+#include "sph/boundary_forces.hpp"
 
 #include "ipropagator.hpp"
 #include "ve_hydro.hpp"
@@ -80,6 +81,7 @@ public:
         computeMarkRamp(first, last, d, domain.box());
         timer.step("MarkRamp");
 
+        fixedBoundaryForceCorrection(first, last, d, domain.box());
         artificialGravity(first, last, d, gravityConstant);
         timer.step("ArtificialGravity");
 

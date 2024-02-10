@@ -224,15 +224,15 @@ public:
         T      volumeHD     = xSize * settings_.at("y0") * zSize; // (x_size * y_size * z_size) in the high-density zone
         T      particleMass = volumeHD * rhoUp / npartUp;
 
-        std::vector h = createSmoothingLength(d, settings_, particleMass);
-        addFixedBoundaryLayer(Axis.y, d.x, d.y, d.z, h, d.x.size(), initBox, fbcThickness);
+        //std::vector h = createSmoothingLength(d, settings_, particleMass);
+        //addFixedBoundaryLayer(Axis.y, d.x, d.y, d.z, h, d.x.size(), initBox, fbcThickness);
 
         size_t numParticlesGlobal = d.x.size();
         MPI_Allreduce(MPI_IN_PLACE, &numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, simData.comm);
 
-        T              newYMin = *std::min_element(d.y.begin(), d.y.end());
-        T              newYMax = *std::max_element(d.y.begin(), d.y.end());
-        cstone::Box<T> globalBox(0, xSize, newYMin, newYMax, 0, zSize, cstone::BoundaryType::periodic,
+        //T              newYMin = *std::min_element(d.y.begin(), d.y.end());
+        //T              newYMax = *std::max_element(d.y.begin(), d.y.end());
+        cstone::Box<T> globalBox(0, xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic,
                                  cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
 
         syncCoords<KeyType>(rank, numRanks, numParticlesGlobal, d.x, d.y, d.z, globalBox);
@@ -244,8 +244,10 @@ public:
         d.loadOrStoreAttributes(&attributeSetter);
 
         initRayleighTaylorFields(d, settings_, particleMass);
+/*
         initFixedBoundaries(d.y.data(), d.vx.data(), d.vy.data(), d.vz.data(), d.h.data(), globalBox.ymax(),
                             globalBox.ymin(), d.x.size(), fbcThickness);
+*/
 
         return globalBox;
     }
