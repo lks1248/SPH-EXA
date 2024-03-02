@@ -37,8 +37,8 @@ template<class Dataset>
 void fixedBoundaryForceCorrection(size_t startIndex, size_t endIndex, Dataset& d,
                                   const cstone::Box<typename Dataset::RealType>& box)
 {
-    using T  = Dataset::RealType;
-    using Th = Dataset::HydroType;
+    using T  = typename Dataset::RealType;
+    using Th = typename Dataset::HydroType;
 
     cstone::Vec3<bool> isBoundaryFixed = {
         box.boundaryX() == cstone::BoundaryType::fixed,
