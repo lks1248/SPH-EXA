@@ -131,21 +131,12 @@ std::vector<T> createSmoothingLength(Dataset& d, std::map<std::string, double>& 
     return h;
 }
 
-template<class T>
-struct flipBlock
-{
-    void operator() (T& elem)
-    {
-        elem = (elem - 0.5) * (-1.0) + 0.5;
-    }
-};
-
 std::map<std::string, double> RayleighTaylorConstants()
 {
-    return {{"rhoUp", 2.},  {"rhoDown", 1.},    {"gamma", 1.4},    {"firstTimeStep", 1e-6},
-            {"y0", 0.75},   {"omega0", 0.0025}, {"ay0", -0.5},     {"blockSize", 0.0625},
-            {"xSize", 0.5}, {"ySize", 1.5},     {"zSize", 0.0625}, {"fbcThickness", 8.},
-            {"p0", 2.5}, {"RT", 1.0}, {"gravityConstant", 0.5}};
+    return {{"rhoUp", 2.},  {"rhoDown", 1.},    {"gamma", 1.4},          {"firstTimeStep", 1e-6},
+            {"y0", 0.75},   {"omega0", 0.0025}, {"ay0", -0.5},           {"blockSize", 0.0625},
+            {"xSize", 0.5}, {"ySize", 1.5},     {"zSize", 0.0625},       {"fbcThickness", 8.},
+            {"p0", 2.5},    {"RT", 1.0},        {"gravityConstant", 0.5}};
 }
 
 template<class Dataset>
@@ -194,10 +185,6 @@ public:
         std::vector<T> xBlock, yBlock, zBlock;
         readTemplateBlock(glassBlock, reader, xBlock, yBlock, zBlock);
 
-        std::for_each(xBlock.begin(), xBlock.end(), flipBlock<T>{});
-        std::for_each(yBlock.begin(), yBlock.end(), flipBlock<T>{});
-        std::for_each(zBlock.begin(), zBlock.end(), flipBlock<T>{});
-
         cstone::Box<T> initBox(0, xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic,
                                cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
 
@@ -205,9 +192,6 @@ public:
         auto     initialBoundaries = cstone::initialDomainSplits<KeyType>(numRanks, level);
         KeyType  keyStart          = initialBoundaries[rank];
         KeyType  keyEnd            = initialBoundaries[rank + 1];
-
-        sortBySfcKey<KeyType>(xBlock, yBlock, zBlock);
-        auto [xHalf, yHalf, zHalf] = makeLessDenseTemplate<T>(2, xBlock, yBlock, zBlock);
 
         int               multi1D      = std::rint(cbrtNumPart / std::cbrt(xBlock.size()));
         cstone::Vec3<int> multiplicity = {xBlocks * multi1D, yBlocks / 2 * multi1D, multi1D};
@@ -217,21 +201,39 @@ public:
         cstone::Box<T> layer2(0, xSize, ySize / 2., ySize, 0, zSize, cstone::BoundaryType::periodic,
                               cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
 
-        assembleCuboid<T>(keyStart, keyEnd, layer1, multiplicity, xHalf, yHalf, zHalf, d.x, d.y, d.z);
+        std::vector<T> xStretch, yStretch, zStretch;
+        assembleCuboid<T>(keyStart, keyEnd, layer1, multiplicity, xBlock, yBlock, zBlock, xStretch, yStretch, zStretch);
+
+        T    stretch  = std::cbrt(settings_.at("rhoUp") / settings_.at("rhoDown"));
+        auto inLayer1 = [b = layer1](T x, T y, T z)
+        { return x >= b.xmin() && x < b.xmax() && y >= b.ymin() && y < b.ymax() && z >= b.zmin() && z < b.zmax(); };
+
+        for (size_t i = 0; i < xStretch.size(); i++)
+        {
+            cstone::Vec3<T> X{xStretch[i], yStretch[i], zStretch[i]};
+            X *= stretch;
+            if (inLayer1(X[0], X[1], X[2]))
+            {
+                d.x.push_back(X[0]);
+                d.y.push_back(X[1]);
+                d.z.push_back(X[2]);
+            }
+        }
+
         assembleCuboid<T>(keyStart, keyEnd, layer2, multiplicity, xBlock, yBlock, zBlock, d.x, d.y, d.z);
 
         size_t npartUp      = halfBlocks * xBlock.size();
         T      volumeHD     = xSize * settings_.at("y0") * zSize; // (x_size * y_size * z_size) in the high-density zone
         T      particleMass = volumeHD * rhoUp / npartUp;
 
-        //std::vector h = createSmoothingLength(d, settings_, particleMass);
-        //addFixedBoundaryLayer(Axis.y, d.x, d.y, d.z, h, d.x.size(), initBox, fbcThickness);
+        // std::vector h = createSmoothingLength(d, settings_, particleMass);
+        // addFixedBoundaryLayer(Axis.y, d.x, d.y, d.z, h, d.x.size(), initBox, fbcThickness);
 
         size_t numParticlesGlobal = d.x.size();
         MPI_Allreduce(MPI_IN_PLACE, &numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, simData.comm);
 
-        //T              newYMin = *std::min_element(d.y.begin(), d.y.end());
-        //T              newYMax = *std::max_element(d.y.begin(), d.y.end());
+        // T              newYMin = *std::min_element(d.y.begin(), d.y.end());
+        // T              newYMax = *std::max_element(d.y.begin(), d.y.end());
         cstone::Box<T> globalBox(0, xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic,
                                  cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
 
@@ -244,10 +246,10 @@ public:
         d.loadOrStoreAttributes(&attributeSetter);
 
         initRayleighTaylorFields(d, settings_, particleMass);
-/*
-        initFixedBoundaries(d.y.data(), d.vx.data(), d.vy.data(), d.vz.data(), d.h.data(), globalBox.ymax(),
-                            globalBox.ymin(), d.x.size(), fbcThickness);
-*/
+        /*
+                initFixedBoundaries(d.y.data(), d.vx.data(), d.vy.data(), d.vz.data(), d.h.data(), globalBox.ymax(),
+                                    globalBox.ymin(), d.x.size(), fbcThickness);
+        */
 
         return globalBox;
     }
