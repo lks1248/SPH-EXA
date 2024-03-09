@@ -66,14 +66,16 @@ void fixedBoundaryForceCorrection(size_t startIndex, size_t endIndex, Dataset& d
                     Th              hi             = d.h[i];
                     Th              relDistanceMax = std::abs(boxMax[j] - X[j]) / hi;
                     Th              relDistanceMin = std::abs(boxMin[j] - X[j]) / hi;
-                    if (relDistanceMax < 2)
+                    if (relDistanceMax < 4)
                     {
-                        T whi = lt::lookup(d.wh.data(), relDistanceMax); // need to normalize?
+                        T maxDistance = std::min(relDistanceMax, 2);
+                        T whi = d.K * lt::lookup(d.wh.data(), maxDistance); // need to normalize?
                         A[j][i] -= 2 * A[j][i] * whi;
                     }
-                    if (relDistanceMin < 2)
+                    if (relDistanceMin < 4)
                     {
-                        T whi = lt::lookup(d.wh.data(), relDistanceMin);
+                        T minDistance = std::min(relDistanceMin, 2);
+                        T whi = d.K * lt::lookup(d.wh.data(), minDistance);
                         A[j][i] -= 2 * A[j][i] * whi;
                     }
                 }
