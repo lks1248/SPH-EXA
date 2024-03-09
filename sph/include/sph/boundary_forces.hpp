@@ -45,8 +45,8 @@ void fixedBoundaryForceCorrection(size_t startIndex, size_t endIndex, Dataset& d
         box.boundaryY() == cstone::BoundaryType::fixed,
         box.boundaryZ() == cstone::BoundaryType::fixed,
     };
-    cstone::Vec3<T>   boxMax = {box.xmax(), box.ymax(), box.zmax()};
-    cstone::Vec3<T>   boxMin = {box.xmin(), box.ymin(), box.zmin()};
+    cstone::Vec3<T>         boxMax = {box.xmax(), box.ymax(), box.zmax()};
+    cstone::Vec3<T>         boxMin = {box.xmin(), box.ymin(), box.zmin()};
     cstone::Vec3<Th* const> A      = {d.ax.data(), d.ay.data(), d.az.data()};
 
     if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
@@ -69,13 +69,13 @@ void fixedBoundaryForceCorrection(size_t startIndex, size_t endIndex, Dataset& d
                     if (relDistanceMax < 4)
                     {
                         T maxDistance = std::min(relDistanceMax, 2);
-                        T whi = d.K * lt::lookup(d.wh.data(), maxDistance); // need to normalize?
+                        T whi         = d.K * lt::lookup(d.wh.data(), maxDistance); // need to normalize?
                         A[j][i] -= 2 * A[j][i] * whi;
                     }
                     if (relDistanceMin < 4)
                     {
                         T minDistance = std::min(relDistanceMin, 2);
-                        T whi = d.K * lt::lookup(d.wh.data(), minDistance);
+                        T whi         = d.K * lt::lookup(d.wh.data(), minDistance);
                         A[j][i] -= 2 * A[j][i] * whi;
                     }
                 }
