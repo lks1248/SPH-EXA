@@ -69,12 +69,12 @@ void fixedBoundaryForceCorrection(size_t startIndex, size_t endIndex, Dataset& d
                     if (relDistanceMax < 4)
                     {
                         T whi = d.K * lt::lookup(d.wh.data(), 0.5 * relDistanceMax);
-                        A[j][i] -= 2 * A[j][i] * whi;
+                        A[j][i] -= A[j][i] * whi;
                     }
                     if (relDistanceMin < 4)
                     {
                         T whi = d.K * lt::lookup(d.wh.data(), 0.5 * relDistanceMin);
-                        A[j][i] -= 2 * A[j][i] * whi;
+                        A[j][i] -= A[j][i] * whi;
                     }
                 }
             }
