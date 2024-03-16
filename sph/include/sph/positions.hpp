@@ -45,7 +45,7 @@ namespace sph
 
 //! @brief checks whether a particle is close to a fixed boundary and reflects the velocity if so
 template<class Tc, class Th>
-HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, cstone::Vec3<Th>& V, cstone::Vec3<Th>& A,
+HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, cstone::Vec3<Tc>& V, cstone::Vec3<Tc>& A,
                                const cstone::Box<Tc>& box, const Th& hi, const double dt)
 {
     cstone::Vec3<bool> isBoundaryFixed = {
