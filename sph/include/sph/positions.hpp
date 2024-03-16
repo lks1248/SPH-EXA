@@ -43,11 +43,29 @@
 namespace sph
 {
 
-//! @brief checks whether a particle is in the fixed boundary region in one dimension
-template<class Tc, class Th, class Tb>
-HOST_DEVICE_FUN bool fbcCheck(Tc coord, Th h, Tb top, Tb bottom, bool fbc, int fbcThickness)
+//! @brief checks whether a particle is close to a fixed boundary and reflects the velocity if so
+template<class Tc, class Th>
+HOST_DEVICE_FUN void fbcVelocityFlip(const cstone::Vec3<Tc> X, cstone::Vec3<Tc> V, const cstone::Box<Tc>& box,
+                                     const Th& hi)
 {
-    return fbc && (std::abs(top - coord) < 2.0 * fbcThickness * h || std::abs(bottom - coord) < 2.0 * fbcThickness * h);
+    cstone::Vec3<bool> isBoundaryFixed = {
+        box.boundaryX() == cstone::BoundaryType::fixed,
+        box.boundaryY() == cstone::BoundaryType::fixed,
+        box.boundaryZ() == cstone::BoundaryType::fixed,
+    };
+    cstone::Vec3<Tc> boxMax = {box.xmax(), box.ymax(), box.zmax()};
+    cstone::Vec3<Tc> boxMin = {box.xmin(), box.ymin(), box.zmin()};
+
+    for (int j = 0; j < 3; ++j)
+    {
+        if (isBoundaryFixed[j])
+        {
+            Th relDistanceMax = std::abs(boxMax[j] - X[j]) / hi;
+            Th relDistanceMin = std::abs(boxMin[j] - X[j]) / hi;
+
+            if (relDistanceMin < 0.01 || relDistanceMax < 0.01) { V[j] *= -1; }
+        }
+    }
 }
 
 //! @brief update the energy according to Adams-Bashforth (2nd order)
@@ -63,17 +81,18 @@ HOST_DEVICE_FUN double energyUpdate(double u_old, double dt, double dt_m1, T1 du
 }
 
 //! @brief Update positions according to Press (2nd order)
-template<class T>
+template<class T, class Th>
 HOST_DEVICE_FUN auto positionUpdate(double dt, double dt_m1, cstone::Vec3<T> X, cstone::Vec3<T> A, cstone::Vec3<T> X_m1,
-                                    const cstone::Box<T>& box)
+                                    const cstone::Box<T>& box, bool anyFbc, const Th& hi)
 {
     double deltaA = dt + T(0.5) * dt_m1;
     double deltaB = T(0.5) * (dt + dt_m1);
 
     auto Val = X_m1 * (T(1) / dt_m1);
     auto V   = Val + A * deltaA;
-    auto dX  = dt * Val + A * deltaB * dt;
-    X        = cstone::putInBox(X + dX, box);
+    if (anyFbc) { fbcVelocityFlip(X, V, box, hi); }
+    auto dX = dt * Val + A * deltaB * dt;
+    X       = cstone::putInBox(X + dX, box);
 
     return util::tuple<cstone::Vec3<T>, cstone::Vec3<T>, cstone::Vec3<T>>{X, V, dX};
 }
@@ -85,27 +104,17 @@ void updatePositionsHost(size_t startIndex, size_t endIndex, Dataset& d, const c
     bool fbcY = (box.boundaryY() == cstone::BoundaryType::fixed);
     bool fbcZ = (box.boundaryZ() == cstone::BoundaryType::fixed);
 
-    bool anyFBC       = false;
-    int  fbcThickness = box.fbcThickness();
+    bool anyFBC = fbcX || fbcY || fbcZ;
 
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; i++)
     {
-        if (anyFBC && d.vx[i] == T(0) && d.vy[i] == T(0) && d.vz[i] == T(0))
-        {
-            if (fbcCheck(d.x[i], d.h[i], box.xmax(), box.xmin(), fbcX, fbcThickness) ||
-                fbcCheck(d.y[i], d.h[i], box.ymax(), box.ymin(), fbcY, fbcThickness) ||
-                fbcCheck(d.z[i], d.h[i], box.zmax(), box.zmin(), fbcZ, fbcThickness))
-            {
-                continue;
-            }
-        }
 
         cstone::Vec3<T> A{d.ax[i], d.ay[i], d.az[i]};
         cstone::Vec3<T> X{d.x[i], d.y[i], d.z[i]};
         cstone::Vec3<T> X_m1{d.x_m1[i], d.y_m1[i], d.z_m1[i]};
         cstone::Vec3<T> V;
-        util::tie(X, V, X_m1) = positionUpdate(d.minDt, d.minDt_m1, X, A, X_m1, box);
+        util::tie(X, V, X_m1) = positionUpdate(d.minDt, d.minDt_m1, X, A, X_m1, box, anyFBC, d.h[i]);
 
         util::tie(d.x[i], d.y[i], d.z[i])          = util::tie(X[0], X[1], X[2]);
         util::tie(d.x_m1[i], d.y_m1[i], d.z_m1[i]) = util::tie(X_m1[0], X_m1[1], X_m1[2]);
@@ -119,25 +128,9 @@ void updateTempHost(size_t startIndex, size_t endIndex, Dataset& d, const cstone
     bool haveMui = !d.mui.empty();
     auto constCv = idealGasCv(d.muiConst, d.gamma);
 
-    bool fbcX = (box.boundaryX() == cstone::BoundaryType::fixed);
-    bool fbcY = (box.boundaryY() == cstone::BoundaryType::fixed);
-    bool fbcZ = (box.boundaryZ() == cstone::BoundaryType::fixed);
-
-    bool anyFBC       = false;
-    int  fbcThickness = box.fbcThickness();
-
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; i++)
     {
-        if (anyFBC && d.vx[i] == T(0) && d.vy[i] == T(0) && d.vz[i] == T(0))
-        {
-            if (fbcCheck(d.x[i], d.h[i], box.xmax(), box.xmin(), fbcX, fbcThickness) ||
-                fbcCheck(d.y[i], d.h[i], box.ymax(), box.ymin(), fbcY, fbcThickness) ||
-                fbcCheck(d.z[i], d.h[i], box.zmax(), box.zmin(), fbcZ, fbcThickness))
-            {
-                continue;
-            }
-        }
         auto cv    = haveMui ? idealGasCv(d.mui[i], d.gamma) : constCv;
         auto u_old = cv * d.temp[i];
         d.temp[i]  = energyUpdate(u_old, d.minDt, d.minDt_m1, d.du[i], d.du_m1[i]) / cv;
@@ -148,25 +141,10 @@ void updateTempHost(size_t startIndex, size_t endIndex, Dataset& d, const cstone
 template<class Dataset, class T>
 void updateIntEnergyHost(size_t startIndex, size_t endIndex, Dataset& d, const cstone::Box<T>& box)
 {
-    bool fbcX = (box.boundaryX() == cstone::BoundaryType::fixed);
-    bool fbcY = (box.boundaryY() == cstone::BoundaryType::fixed);
-    bool fbcZ = (box.boundaryZ() == cstone::BoundaryType::fixed);
-
-    bool anyFBC       = false;
-    int  fbcThickness = box.fbcThickness();
 
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; i++)
     {
-        if (anyFBC && d.vx[i] == T(0) && d.vy[i] == T(0) && d.vz[i] == T(0))
-        {
-            if (fbcCheck(d.x[i], d.h[i], box.xmax(), box.xmin(), fbcX, fbcThickness) ||
-                fbcCheck(d.y[i], d.h[i], box.ymax(), box.ymin(), fbcY, fbcThickness) ||
-                fbcCheck(d.z[i], d.h[i], box.zmax(), box.zmin(), fbcZ, fbcThickness))
-            {
-                continue;
-            }
-        }
         d.u[i]     = energyUpdate(d.u[i], d.minDt, d.minDt_m1, d.du[i], d.du_m1[i]);
         d.du_m1[i] = d.du[i];
     }

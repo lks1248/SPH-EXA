@@ -39,32 +39,16 @@ template<class Tc, class Tv, class Ta, class Tdu, class Tm1, class Tt, class Thy
 __global__ void computePositionsKernel(size_t first, size_t last, double dt, double dt_m1, Tc* x, Tc* y, Tc* z, Tv* vx,
                                        Tv* vy, Tv* vz, Tm1* x_m1, Tm1* y_m1, Tm1* z_m1, Ta* ax, Ta* ay, Ta* az,
                                        Tt* temp, Tt* u, Tdu* du, Tm1* du_m1, Thydro* h, Thydro* mui, Tc gamma,
-                                       Tc constCv, const cstone::Box<Tc> box)
+                                       Tc constCv, const cstone::Box<Tc> box, const bool anyFBC)
 {
     cstone::LocalIndex i = first + blockDim.x * blockIdx.x + threadIdx.x;
     if (i >= last) { return; }
-
-    bool fbcX         = (box.boundaryX() == cstone::BoundaryType::fixed);
-    bool fbcY         = (box.boundaryY() == cstone::BoundaryType::fixed);
-    bool fbcZ         = (box.boundaryZ() == cstone::BoundaryType::fixed);
-    bool anyFBC       = false;
-    int  fbcThickness = box.fbcThickness();
-
-    if (anyFBC && vx[i] == Tv(0) && vy[i] == Tv(0) && vz[i] == Tv(0))
-    {
-        if (fbcCheck(x[i], h[i], box.xmax(), box.xmin(), fbcX, fbcThickness) ||
-            fbcCheck(y[i], h[i], box.ymax(), box.ymin(), fbcY, fbcThickness) ||
-            fbcCheck(z[i], h[i], box.zmax(), box.zmin(), fbcZ, fbcThickness))
-        {
-            return;
-        }
-    }
 
     cstone::Vec3<Tc> A{ax[i], ay[i], az[i]};
     cstone::Vec3<Tc> X{x[i], y[i], z[i]};
     cstone::Vec3<Tc> X_m1{x_m1[i], y_m1[i], z_m1[i]};
     cstone::Vec3<Tc> V;
-    util::tie(X, V, X_m1) = positionUpdate(Tc(dt), Tc(dt_m1), X, A, X_m1, box);
+    util::tie(X, V, X_m1) = positionUpdate(Tc(dt), Tc(dt_m1), X, A, X_m1, box, anyFBC, h[i]);
 
     util::tie(x[i], y[i], z[i])          = util::tie(X[0], X[1], X[2]);
     util::tie(x_m1[i], y_m1[i], z_m1[i]) = util::tie(X_m1[0], X_m1[1], X_m1[2]);
@@ -93,8 +77,13 @@ void computePositionsGpu(size_t first, size_t last, double dt, double dt_m1, Tc*
     unsigned           numThreads   = 256;
     unsigned           numBlocks    = (numParticles + numThreads - 1) / numThreads;
 
+    bool fbcX   = (box.boundaryX() == cstone::BoundaryType::fixed);
+    bool fbcY   = (box.boundaryY() == cstone::BoundaryType::fixed);
+    bool fbcZ   = (box.boundaryZ() == cstone::BoundaryType::fixed);
+    bool anyFBC = fbcX || fbcY || fbcZ;
+
     computePositionsKernel<<<numBlocks, numThreads>>>(first, last, dt, dt_m1, x, y, z, vx, vy, vz, x_m1, y_m1, z_m1, ax,
-                                                      ay, az, temp, u, du, du_m1, h, mui, gamma, constCv, box);
+                                                      ay, az, temp, u, du, du_m1, h, mui, gamma, constCv, box, anyFBC);
 }
 
 #define POS_GPU(Tc, Tv, Ta, Tdu, Tm1, Tt, Thydro)                                                                      \

@@ -81,7 +81,7 @@ public:
         computeMarkRamp(first, last, d, domain.box());
         timer.step("MarkRamp");
 
-        fixedBoundaryForceCorrection(first, last, d, domain.box());
+        // fixedBoundaryForceCorrection(first, last, d, domain.box());
         artificialGravity(first, last, d, gravityConstant);
         timer.step("ArtificialGravity");
 

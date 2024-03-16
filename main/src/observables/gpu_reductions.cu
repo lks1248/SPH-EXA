@@ -185,11 +185,12 @@ struct MarkRampCond
     HOST_DEVICE_FUN
     void operator()(thrust::tuple<T, T, T, Tm, AuxT<T>&, AuxT<T>&> p)
     {
-        T  h        = get<0>(p);
-        T  y        = get<1>(p);
-        T  vy       = get<2>(p);
-        Tm markRamp = get<3>(p);
-        if (markRamp > 0.05 && !sph::fbcCheck(y, 2.0 * h, ymax, ymin, true, fbcThickness))
+        T    h               = get<0>(p);
+        T    y               = get<1>(p);
+        T    vy              = get<2>(p);
+        Tm   markRamp        = get<3>(p);
+        bool closeToBoundary = thrust::min(std::abs(y - ymin), std::abs(y - ymax)) / h < 2 * h;
+        if (markRamp > 0.05 && !closeToBoundary)
         {
             thrust::get<4>(p) = {y, vy};
             thrust::get<5>(p) = {y, vy};
@@ -234,7 +235,7 @@ std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size
 
 #define RTGROWTH(T, Tc, Th)                                                                                            \
     template std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(                              \
-        size_t first, size_t last, Tc ymin, Tc ymax, int fbcThickness, const Th* h, const T* y, const Th* vy,           \
+        size_t first, size_t last, Tc ymin, Tc ymax, int fbcThickness, const Th* h, const T* y, const Th* vy,          \
         const Th* markRamp);
 
 RTGROWTH(double, double, double);
