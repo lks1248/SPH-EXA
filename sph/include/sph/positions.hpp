@@ -45,8 +45,8 @@ namespace sph
 
 //! @brief checks whether a particle is close to a fixed boundary and reflects the velocity if so
 template<class Tc, class Th>
-HOST_DEVICE_FUN void fbcVelocityFlip(const cstone::Vec3<Tc> X, cstone::Vec3<Tc> V, const cstone::Box<Tc>& box,
-                                     const Th& hi)
+HOST_DEVICE_FUN void fbcVelocityFlip(const cstone::Vec3<Tc> X, cstone::Vec3<Tc>& V, const cstone::Box<Tc>& box,
+                                     const Th& hi, const double dt)
 {
     cstone::Vec3<bool> isBoundaryFixed = {
         box.boundaryX() == cstone::BoundaryType::fixed,
@@ -60,10 +60,12 @@ HOST_DEVICE_FUN void fbcVelocityFlip(const cstone::Vec3<Tc> X, cstone::Vec3<Tc> 
     {
         if (isBoundaryFixed[j])
         {
-            Th relDistanceMax = std::abs(boxMax[j] - X[j]) / hi;
-            Th relDistanceMin = std::abs(boxMin[j] - X[j]) / hi;
+            // Flip the velocity if integration would put the particle in the "critical" zone
+            Tc dXj            = X[j] + V[j] * dt;
+            Th relDistanceMax = std::abs(boxMax[j] - dXj) / hi;
+            Th relDistanceMin = std::abs(boxMin[j] - dXj) / hi;
 
-            if (relDistanceMin < 0.01 || relDistanceMax < 0.01) { V[j] *= -1; }
+            if (relDistanceMin < 0.02 || relDistanceMax < 0.02) { V[j] *= -1; }
         }
     }
 }
@@ -90,7 +92,7 @@ HOST_DEVICE_FUN auto positionUpdate(double dt, double dt_m1, cstone::Vec3<T> X, 
 
     auto Val = X_m1 * (T(1) / dt_m1);
     auto V   = Val + A * deltaA;
-    if (anyFbc) { fbcVelocityFlip(X, V, box, hi); }
+    if (anyFbc) { fbcVelocityFlip(X, V, box, hi, dt); }
     auto dX = dt * Val + A * deltaB * dt;
     X       = cstone::putInBox(X + dX, box);
 
