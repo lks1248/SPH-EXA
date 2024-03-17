@@ -65,7 +65,7 @@ HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, cstone::Vec3<Tc>& V, cs
             Th relDistanceMax = std::abs(boxMax[j] - dXj) / hi;
             Th relDistanceMin = std::abs(boxMin[j] - dXj) / hi;
 
-            if ((relDistanceMin < 0.1 && V[j] < 0) || (relDistanceMax < 0.1 && V[j] > 0))
+            if ((relDistanceMin < 0.05 && V[j] < 0) || (relDistanceMax < 0.05 && V[j] > 0))
             {
                 V[j] *= -1;
                 A[j] *= -1;
