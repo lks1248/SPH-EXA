@@ -220,11 +220,11 @@ std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size
     thrust::sort(thrust::device, targetUp.begin(), endUp, greaterRT());
     thrust::sort(thrust::device, targetDown.begin(), endDown, lowerRT());
 
-    targetUp.resize(50);
-    targetDown.resize(50);
+    targetUp.resize(350);
+    targetDown.resize(350);
 
-    std::vector<AuxT<T>> retUp(50);
-    std::vector<AuxT<T>> retDown(50);
+    std::vector<AuxT<T>> retUp(350);
+    std::vector<AuxT<T>> retDown(3350);
     thrust::copy(targetUp.begin(), targetUp.end(), retUp.begin());
     thrust::copy(targetDown.begin(), targetDown.end(), retDown.begin());
 
