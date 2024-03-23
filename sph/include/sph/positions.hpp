@@ -97,8 +97,9 @@ HOST_DEVICE_FUN auto positionUpdate(double dt, double dt_m1, cstone::Vec3<T> X, 
     auto Val = X_m1 * (T(1) / dt_m1);
     auto V   = Val + A * deltaA;
     if (anyFbc) { fbcAdjust(X, V, A, box, hi, dt); }
-    auto dX = dt * Val + (V - Val) * dt * deltaB / deltaA;
-    X       = cstone::putInBox(X + dX, box);
+    double deltaC = deltaB / deltaA;
+    auto   dX     = dt * Val + (V - Val) * dt * deltaC;
+    X             = cstone::putInBox(X + dX, box);
 
     return util::tuple<cstone::Vec3<T>, cstone::Vec3<T>, cstone::Vec3<T>>{X, V, dX};
 }
