@@ -62,7 +62,7 @@ namespace sphexa
  */
 template<class T, class Th, class Tc>
 std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
-localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, int fbcThickness, const Th* h,
+localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, const Th* h,
                             const T* y, const Th* vy, const Th* markRamp)
 {
     std::vector<AuxT<T>> localUp(endIndex - startIndex);
@@ -105,17 +105,16 @@ template<typename T, class Dataset>
 util::tuple<T, T, T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, MPI_Comm comm,
                                                       const cstone::Box<T>& box)
 {
-    int                                                    fbcThickness = box.fbcThickness();
     std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localRet;
     if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
     {
         std::tie(std::get<0>(localRet), std::get<1>(localRet)) =
-            localGrowthRateRTGpu(startIndex, endIndex, box.ymin(), box.ymax(), fbcThickness, rawPtr(d.devData.h),
+            localGrowthRateRTGpu(startIndex, endIndex, box.ymin(), box.ymax(), rawPtr(d.devData.h),
                                  rawPtr(d.devData.y), rawPtr(d.devData.vy), rawPtr(d.devData.markRamp));
     }
     else
     {
-        localRet = localVelocitiesRTGrowthRate(startIndex, endIndex, box.ymin(), box.ymax(), fbcThickness, d.h.data(),
+        localRet = localVelocitiesRTGrowthRate(startIndex, endIndex, box.ymin(), box.ymax(), d.h.data(),
                                                d.y.data(), d.vy.data(), d.markRamp.data());
     }
 

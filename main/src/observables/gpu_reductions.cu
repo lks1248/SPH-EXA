@@ -198,12 +198,10 @@ struct MarkRampCond
     }
     Tc  ymin;
     Tc  ymax;
-    int fbcThickness;
 };
 
 template<class T, class Tc, class Th>
-std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size_t first, size_t last, Tc ymin, Tc ymax,
-                                                                            int fbcThickness, const Th* h, const T* y,
+std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y,
                                                                             const Th* vy, const Th* markRamp)
 {
     thrust::device_vector<AuxT<T>> targetUp(last - first);
@@ -214,7 +212,7 @@ std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size
     auto it2 = thrust::make_zip_iterator(
         thrust::make_tuple(h + last, y + last, vy + last, markRamp + last, targetUp.end(), targetDown.end()));
 
-    thrust::for_each(thrust::device, it1, it2, MarkRampCond<T, Tc, Th>{ymin, ymax, fbcThickness});
+    thrust::for_each(thrust::device, it1, it2, MarkRampCond<T, Tc, Th>{ymin, ymax});
 
     auto endUp   = thrust::remove_if(thrust::device, targetUp.begin(), targetUp.end(), invalidAuxTEntry<T>());
     auto endDown = thrust::remove_if(thrust::device, targetDown.begin(), targetDown.end(), invalidAuxTEntry<T>());
@@ -235,7 +233,7 @@ std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size
 
 #define RTGROWTH(T, Tc, Th)                                                                                            \
     template std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(                              \
-        size_t first, size_t last, Tc ymin, Tc ymax, int fbcThickness, const Th* h, const T* y, const Th* vy,          \
+        size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y, const Th* vy,          \
         const Th* markRamp);
 
 RTGROWTH(double, double, double);
