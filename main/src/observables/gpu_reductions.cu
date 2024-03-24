@@ -189,7 +189,7 @@ struct MarkRampCond
         T    y               = get<1>(p);
         T    vy              = get<2>(p);
         Tm   markRamp        = get<3>(p);
-        bool closeToBoundary = thrust::min(std::abs(y - ymin), std::abs(y - ymax)) / h < 2 * h;
+        bool closeToBoundary = thrust::min(std::abs(y - ymin), std::abs(y - ymax)) / h < 2;
         if (markRamp > 0.05 && !closeToBoundary)
         {
             thrust::get<4>(p) = {y, vy};
