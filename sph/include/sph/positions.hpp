@@ -48,6 +48,8 @@ template<class Tc, class Th>
 HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, cstone::Vec3<Tc>& V, const cstone::Vec3<Tc>& A,
                                const cstone::Box<Tc>& box, const Th& hi, const double dt)
 {
+    double             threshold       = 0.5;
+    double             invTHold        = 1 / threshold;
     cstone::Vec3<bool> isBoundaryFixed = {
         box.boundaryX() == cstone::BoundaryType::fixed,
         box.boundaryY() == cstone::BoundaryType::fixed,
@@ -64,11 +66,9 @@ HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, cstone::Vec3<Tc>& V, co
             Tc dXj            = X[j] + V[j] * dt + 0.5 * A[j] * dt * dt;
             Th relDistanceMax = std::abs(boxMax[j] - dXj) / hi;
             Th relDistanceMin = std::abs(boxMin[j] - dXj) / hi;
+            Th minDistance    = relDistanceMin < relDistanceMax ? relDistanceMin : relDistanceMax;
 
-            if ((relDistanceMin < 0.03 && V[j] < 0) || (relDistanceMax < 0.03 && V[j] > 0))
-            {
-                V[j] *= -1;
-            }
+            if (minDistance < threshold) { V[j] *= -1 + invTHold * minDistance; }
         }
     }
 }
