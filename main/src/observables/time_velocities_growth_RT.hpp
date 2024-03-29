@@ -71,7 +71,7 @@ localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax
 #pragma omp parallel for
     for (size_t i = startIndex; i < endIndex; i++)
     {
-        bool closeToBoundary = std::min(std::abs(y[i] - ymin), std::abs(y[i] - ymax)) / h[i] < 2;
+        bool closeToBoundary = std::min(std::abs(y[i] - ymin), std::abs(y[i] - ymax)) / h[i] < 8.;
         if (markRamp[i] > 0.05 && !closeToBoundary)
         {
             localUp[i - startIndex]   = {y[i], vy[i]};
