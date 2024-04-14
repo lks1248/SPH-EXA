@@ -109,28 +109,6 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     }
 }
 
-/*!
- * @brief create temporary smoothing lengths to add fixed boundary particles
- */
-template<class Dataset, class T>
-std::vector<T> createSmoothingLength(Dataset& d, std::map<std::string, double>& constants, T particleMass)
-{
-    T              rhoUp   = constants.at("rhoUp");
-    T              rhoDown = constants.at("rhoDown");
-    T              y0      = constants.at("y0");
-    size_t         ng0     = 100;
-    T              hUp     = 0.5 * std::cbrt(3. * ng0 * particleMass / 4. / M_PI / rhoUp);
-    T              hDown   = 0.5 * std::cbrt(3. * ng0 * particleMass / 4. / M_PI / rhoDown);
-    std::vector<T> h(d.x.size());
-
-    for (int i = 0; i < d.x.size(); ++i)
-    {
-        if (d.y[i] < y0) { h[i] = hDown; }
-        else { h[i] = hUp; }
-    }
-    return h;
-}
-
 std::map<std::string, double> RayleighTaylorConstants()
 {
     return {{"rhoUp", 2.},  {"rhoDown", 1.},    {"gamma", 1.4},          {"firstTimeStep", 1e-6},
@@ -198,7 +176,7 @@ public:
 
         cstone::Box<T> layer1(0, xSize, 0, ySize / 2., 0, zSize, cstone::BoundaryType::periodic,
                               cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
-        cstone::Box<T> layer2(0, xSize, std::nextafter(ySize/2., ySize), ySize, 0, zSize, cstone::BoundaryType::periodic,
+        cstone::Box<T> layer2(0, xSize, ySize / 2., ySize, 0, zSize, cstone::BoundaryType::periodic,
                               cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
 
         std::vector<T> xStretch, yStretch, zStretch;
