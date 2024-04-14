@@ -198,7 +198,7 @@ public:
 
         cstone::Box<T> layer1(0, xSize, 0, ySize / 2., 0, zSize, cstone::BoundaryType::periodic,
                               cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
-        cstone::Box<T> layer2(0, xSize, ySize / 2., ySize, 0, zSize, cstone::BoundaryType::periodic,
+        cstone::Box<T> layer2(0, xSize, std::nextafter(ySize/2., ySize), ySize, 0, zSize, cstone::BoundaryType::periodic,
                               cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
 
         std::vector<T> xStretch, yStretch, zStretch;
