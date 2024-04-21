@@ -71,20 +71,17 @@ void computeMarkRamp(size_t startIndex, size_t endIndex, Dataset& d, const cston
 template<class T, class Dataset>
 void artificialGravity(size_t startIndex, size_t endIndex, Dataset& d, T grav)
 {
-    if (d.iteration > 200)
-    {
 
-        if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
-        {
-            cuda::artificialGravity(startIndex, endIndex, d, grav);
-        }
-        else
-        {
+    if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
+    {
+        cuda::artificialGravity(startIndex, endIndex, d, grav);
+    }
+    else
+    {
 #pragma omp parallel for schedule(static)
-            for (size_t i = startIndex; i < endIndex; i++)
-            {
-                d.ay[i] -= grav;
-            }
+        for (size_t i = startIndex; i < endIndex; i++)
+        {
+            d.ay[i] -= grav;
         }
     }
 }
