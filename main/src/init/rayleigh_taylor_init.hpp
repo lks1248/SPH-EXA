@@ -139,12 +139,13 @@ public:
         using T       = typename Dataset::RealType;
         auto& d       = simData.hydro;
 
+        /*
         if (d.propagator != "RT-ve")
         {
             throw std::runtime_error("ERROR: For the Rayleigh Taylor test (--init RT) the SPH propagator has to be "
                                      "RT-ve. Please restart with '--prop RT-ve'\n");
         }
-
+        */
         T rhoUp = settings_.at("rhoUp");
 
         T blockSize    = settings_.at("blockSize");
