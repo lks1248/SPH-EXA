@@ -112,7 +112,7 @@ util::tuple<T, T, T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t 
 
     if (d.markRamp.empty())
     {
-        if (rank = rootRank) { printf("Warning: MarkRamp was not allocated, please check Propagator choice\n"); }
+        if (rank == rootRank) { printf("Warning: MarkRamp was not allocated, please check Propagator choice\n"); }
         return {0, 0, 0, 0};
     }
     std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localRet;
