@@ -178,8 +178,8 @@ public:
         domain.exchangeHalos(get<"c11", "c12", "c13", "c22", "c23", "c33", "divv">(d), get<"ax">(d), get<"keys">(d));
         timer.step("mpi::synchronizeHalos");
 
-        computeAVswitches(first, last, d, domain.box());
-        timer.step("AVswitches");
+        //computeAVswitches(first, last, d, domain.box());
+        //timer.step("AVswitches");
 
         if (avClean)
         {
