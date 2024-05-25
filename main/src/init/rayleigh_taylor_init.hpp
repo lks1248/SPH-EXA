@@ -157,7 +157,20 @@ public:
         cstone::Box<T> globalBox(0, xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic,
                                  cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
 
-        if (readPregenIC) { readTemplateBlock(glassBlock, reader, d.x, d.y, d.z); }
+        if (readPregenIC)
+        {
+            reader->setStep(glassBlock, -1, FileMode::collective);
+            size_t blockSize = reader->numParticles();
+            d.x.resize(blockSize);
+            d.y.resize(blockSize);
+            d.z.resize(blockSize);
+
+            reader->readField("x", d.x.data());
+            reader->readField("y", d.y.data());
+            reader->readField("z", d.z.data());
+
+            reader->closeStep();
+        }
         else
         {
 
