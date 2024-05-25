@@ -49,7 +49,7 @@ template<class T, class Dataset>
 void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& constants, T massPart)
 {
     T rhoUp         = constants.at("rhoUp");
-    T rhoDown       = constants.at("rhoDown");
+    T rhoDown       = 1.;
     T firstTimeStep = constants.at("firstTimeStep");
     T omega0        = constants.at("omega0");
     T gamma         = constants.at("gamma");
@@ -67,7 +67,7 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
     std::fill(d.du_m1.begin(), d.du_m1.end(), 0.0);
     std::fill(d.mue.begin(), d.mue.end(), 2.0);
     std::fill(d.mui.begin(), d.mui.end(), 10.0);
-    std::fill(d.alpha.begin(), d.alpha.end(), d.alphamax);
+    std::fill(d.alpha.begin(), d.alpha.end(), d.alphamin);
     std::fill(d.vx.begin(), d.vx.end(), 0.0);
     std::fill(d.vz.begin(), d.vz.end(), 0.0);
     std::fill(d.x_m1.begin(), d.x_m1.end(), 0.0);
@@ -111,10 +111,10 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
 
 std::map<std::string, double> RayleighTaylorConstants()
 {
-    return {{"rhoUp", 2.},  {"rhoDown", 1.},    {"gamma", 1.4},          {"firstTimeStep", 1e-6},
-            {"y0", 0.75},   {"omega0", 0.0025}, {"ay0", -0.5},           {"blockSize", 0.0625},
-            {"xSize", 0.5}, {"ySize", 1.5},     {"zSize", 0.0625},       {"fbcThickness", 8.},
-            {"p0", 2.5},    {"RT", 1.0},        {"gravityConstant", 0.5}};
+    return {
+        {"rhoUp", 2.},        {"gamma", 1.4},        {"firstTimeStep", 1e-6},  {"y0", 0.75},        {"omega0", 0.0025},
+        {"ay0", -0.5},        {"blockSize", 0.0625}, {"xSize", 0.5},           {"ySize", 1.5},      {"zSize", 0.0625},
+        {"fbcThickness", 8.}, {"p0", 2.5},           {"gravityConstant", 0.5}, {"readPregenIC", .0}};
 }
 
 template<class Dataset>
@@ -139,82 +139,78 @@ public:
         using T       = typename Dataset::RealType;
         auto& d       = simData.hydro;
 
-        /*
         if (d.propagator != "RT-ve")
         {
             throw std::runtime_error("ERROR: For the Rayleigh Taylor test (--init RT) the SPH propagator has to be "
                                      "RT-ve. Please restart with '--prop RT-ve'\n");
         }
-        */
+
         T rhoUp = settings_.at("rhoUp");
 
-        T blockSize    = settings_.at("blockSize");
-        T xSize        = settings_.at("xSize");
-        T ySize        = settings_.at("ySize");
-        T zSize        = settings_.at("zSize");
-        T fbcThickness = settings_.at("fbcThickness");
+        T    blockSize    = settings_.at("blockSize");
+        T    xSize        = settings_.at("xSize");
+        T    ySize        = settings_.at("ySize");
+        T    zSize        = settings_.at("zSize");
+        T    fbcThickness = settings_.at("fbcThickness");
+        bool readPregenIC = settings_.at("readPregenIC") == 1.;
 
-        int xBlocks = xSize / blockSize;
-        int yBlocks = ySize / blockSize;
-        int zBlocks = zSize / blockSize;
-
-        size_t nBlocks    = xBlocks * yBlocks * zBlocks;
-        size_t halfBlocks = nBlocks / 2;
-
-        std::vector<T> xBlock, yBlock, zBlock;
-        readTemplateBlock(glassBlock, reader, xBlock, yBlock, zBlock);
-
-        cstone::Box<T> initBox(0, xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic,
-                               cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
-
-        unsigned level             = cstone::log8ceil<KeyType>(100 * numRanks);
-        auto     initialBoundaries = cstone::initialDomainSplits<KeyType>(numRanks, level);
-        KeyType  keyStart          = initialBoundaries[rank];
-        KeyType  keyEnd            = initialBoundaries[rank + 1];
-
-        int               multi1D      = std::lround(cbrtNumPart / std::cbrt(xBlock.size()));
-        cstone::Vec3<int> multiplicity = {xBlocks * multi1D, yBlocks / 2 * multi1D, multi1D};
-
-        cstone::Box<T> layer1(0, xSize, 0, ySize / 2., 0, zSize, cstone::BoundaryType::periodic,
-                              cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
-        cstone::Box<T> layer2(0, xSize, ySize / 2., ySize, 0, zSize, cstone::BoundaryType::periodic,
-                              cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
-
-        std::vector<T> xStretch, yStretch, zStretch;
-        assembleCuboid<T>(keyStart, keyEnd, layer1, multiplicity, xBlock, yBlock, zBlock, xStretch, yStretch, zStretch);
-
-        T    stretch  = std::cbrt(settings_.at("rhoUp") / settings_.at("rhoDown"));
-        auto inLayer1 = [b = layer1](T x, T y, T z)
-        { return x >= b.xmin() && x < b.xmax() && y >= b.ymin() && y < b.ymax() && z >= b.zmin() && z < b.zmax(); };
-
-        for (size_t i = 0; i < xStretch.size(); i++)
-        {
-            cstone::Vec3<T> X{xStretch[i], yStretch[i], zStretch[i]};
-            X *= stretch;
-            if (inLayer1(X[0], X[1], X[2]))
-            {
-                d.x.push_back(X[0]);
-                d.y.push_back(X[1]);
-                d.z.push_back(X[2]);
-            }
-        }
-
-        assembleCuboid<T>(keyStart, keyEnd, layer2, multiplicity, xBlock, yBlock, zBlock, d.x, d.y, d.z);
-
-        size_t npartUp      = halfBlocks * xBlock.size();
-        T      volumeHD     = xSize * settings_.at("y0") * zSize; // (x_size * y_size * z_size) in the high-density zone
-        T      particleMass = volumeHD * rhoUp / npartUp;
-
-        // std::vector h = createSmoothingLength(d, settings_, particleMass);
-        // addFixedBoundaryLayer(Axis.y, d.x, d.y, d.z, h, d.x.size(), initBox, fbcThickness);
-
-        size_t numParticlesGlobal = d.x.size();
-        MPI_Allreduce(MPI_IN_PLACE, &numParticlesGlobal, 1, MpiType<size_t>{}, MPI_SUM, simData.comm);
-
-        // T              newYMin = *std::min_element(d.y.begin(), d.y.end());
-        // T              newYMax = *std::max_element(d.y.begin(), d.y.end());
         cstone::Box<T> globalBox(0, xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic,
                                  cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
+
+        if (readPregenIC) { readTemplateBlock(glassBlock, reader, d.x, d.y, d.z); }
+        else
+        {
+
+            int xBlocks = xSize / blockSize;
+            int yBlocks = ySize / blockSize;
+            int zBlocks = zSize / blockSize;
+
+            size_t nBlocks    = xBlocks * yBlocks * zBlocks;
+            size_t halfBlocks = nBlocks / 2;
+
+            std::vector<T> xBlock, yBlock, zBlock;
+            readTemplateBlock(glassBlock, reader, xBlock, yBlock, zBlock);
+
+            cstone::Box<T> initBox(0, xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic,
+                                   cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
+
+            unsigned level             = cstone::log8ceil<KeyType>(100 * numRanks);
+            auto     initialBoundaries = cstone::initialDomainSplits<KeyType>(numRanks, level);
+            KeyType  keyStart          = initialBoundaries[rank];
+            KeyType  keyEnd            = initialBoundaries[rank + 1];
+
+            int               multi1D      = std::lround(cbrtNumPart / std::cbrt(xBlock.size()));
+            cstone::Vec3<int> multiplicity = {xBlocks * multi1D, yBlocks / 2 * multi1D, multi1D};
+
+            cstone::Box<T> layer1(0, xSize, 0, ySize / 2., 0, zSize, cstone::BoundaryType::periodic,
+                                  cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
+            cstone::Box<T> layer2(0, xSize, ySize / 2., ySize, 0, zSize, cstone::BoundaryType::periodic,
+                                  cstone::BoundaryType::periodic, cstone::BoundaryType::periodic);
+
+            std::vector<T> xStretch, yStretch, zStretch;
+            assembleCuboid<T>(keyStart, keyEnd, layer1, multiplicity, xBlock, yBlock, zBlock, xStretch, yStretch,
+                              zStretch);
+
+            T    stretch  = std::cbrt(rhoUp);
+            auto inLayer1 = [b = layer1](T x, T y, T z)
+            { return x >= b.xmin() && x < b.xmax() && y >= b.ymin() && y < b.ymax() && z >= b.zmin() && z < b.zmax(); };
+
+            for (size_t i = 0; i < xStretch.size(); i++)
+            {
+                cstone::Vec3<T> X{xStretch[i], yStretch[i], zStretch[i]};
+                X *= stretch;
+                if (inLayer1(X[0], X[1], X[2]))
+                {
+                    d.x.push_back(X[0]);
+                    d.y.push_back(X[1]);
+                    d.z.push_back(X[2]);
+                }
+            }
+
+            assembleCuboid<T>(keyStart, keyEnd, layer2, multiplicity, xBlock, yBlock, zBlock, d.x, d.y, d.z);
+        }
+
+        size_t numParticlesGlobal = d.x.size();
 
         syncCoords<KeyType>(rank, numRanks, numParticlesGlobal, d.x, d.y, d.z, globalBox);
 
@@ -224,11 +220,11 @@ public:
         BuiltinWriter attributeSetter(settings_);
         d.loadOrStoreAttributes(&attributeSetter);
 
+        T volumeHD = xSize * settings_.at("y0") * zSize;         // (x_size * y_size * z_size) in the high-density zone
+        T particleFractionHD = rhoUp / (rhoUp + 1) * d.x.size(); // number of particles in the high density region
+        T particleMass       = volumeHD * rhoUp / particleFractionHD; // mass per particle to match given density ratio
+
         initRayleighTaylorFields(d, settings_, particleMass);
-        /*
-                initFixedBoundaries(d.y.data(), d.vx.data(), d.vy.data(), d.vz.data(), d.h.data(), globalBox.ymax(),
-                                    globalBox.ymin(), d.x.size(), fbcThickness);
-        */
 
         return globalBox;
     }

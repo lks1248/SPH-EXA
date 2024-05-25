@@ -110,7 +110,7 @@ util::tuple<T, T, T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t 
     MPI_Comm_rank(comm, &rank);
     int rootRank = 0;
 
-    if (d.markRamp.empty())
+    if (!d.isAllocated("markRamp"))
     {
         if (rank == rootRank) { printf("Warning: MarkRamp was not allocated, please check Propagator choice\n"); }
         return {0, 0, 0, 0};
