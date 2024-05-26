@@ -184,9 +184,6 @@ public:
             std::vector<T> xBlock, yBlock, zBlock;
             readTemplateBlock(glassBlock, reader, xBlock, yBlock, zBlock);
 
-            cstone::Box<T> initBox(0, xSize, 0, ySize, 0, zSize, cstone::BoundaryType::periodic,
-                                   cstone::BoundaryType::fixed, cstone::BoundaryType::periodic);
-
             unsigned level             = cstone::log8ceil<KeyType>(100 * numRanks);
             auto     initialBoundaries = cstone::initialDomainSplits<KeyType>(numRanks, level);
             KeyType  keyStart          = initialBoundaries[rank];
@@ -234,9 +231,10 @@ public:
         BuiltinWriter attributeSetter(settings_);
         d.loadOrStoreAttributes(&attributeSetter);
 
-        T volumeHD = xSize * settings_.at("y0") * zSize;         // (x_size * y_size * z_size) in the high-density zone
-        T particleFractionHD = rhoUp / (rhoUp + 1) * d.x.size(); // number of particles in the high density region
-        T particleMass       = volumeHD * rhoUp / particleFractionHD; // mass per particle to match given density ratio
+        T volumeHD = xSize * settings_.at("y0") * zSize; // (x_size * y_size * z_size) in the high-density zone
+        T particleFractionHD =
+            rhoUp / (rhoUp + 1) * numParticlesGlobal;           // number of particles in the high density region
+        T particleMass = volumeHD * rhoUp / particleFractionHD; // mass per particle to match given density ratio
 
         initRayleighTaylorFields(d, settings_, particleMass);
 
