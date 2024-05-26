@@ -112,9 +112,9 @@ void initRayleighTaylorFields(Dataset& d, const std::map<std::string, double>& c
 std::map<std::string, double> RayleighTaylorConstants()
 {
     return {
-        {"rhoUp", 2.},        {"gamma", 1.4},        {"firstTimeStep", 1e-6},  {"y0", 0.75},        {"omega0", 0.0025},
-        {"ay0", -0.5},        {"blockSize", 0.0625}, {"xSize", 0.5},           {"ySize", 1.5},      {"zSize", 0.0625},
-        {"fbcThickness", 8.}, {"p0", 2.5},           {"gravityConstant", 0.5}, {"readPregenIC", .0}};
+        {"rhoUp", 2.},        {"gamma", 1.4},        {"firstTimeStep", 1e-6},  {"y0", 0.75},         {"omega0", 0.0025},
+        {"ay0", -0.5},        {"blockSize", 0.0625}, {"xSize", 0.5},           {"ySize", 1.5},       {"zSize", 0.0625},
+        {"fbcThickness", 8.}, {"p0", 2.5},           {"gravityConstant", 0.5}, {"readPregenIC", .0}, {"RT", 1.}};
 }
 
 template<class Dataset>
