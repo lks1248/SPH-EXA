@@ -67,16 +67,13 @@ public:
     {
     }
 
-    void step(DomainType& domain, DataType& simData) override
+    void computeForces(DomainType& domain, DataType& simData) override
     {
         Base::computeForces(domain, simData);
 
         auto&  d     = simData.hydro;
         size_t first = domain.startIndex();
         size_t last  = domain.endIndex();
-
-        computeTimestep(first, last, d);
-        timer.step("Timestep");
 
         computeMarkRamp(first, last, d, domain.box());
         timer.step("MarkRamp");
@@ -85,10 +82,6 @@ public:
         artificialGravity(first, last, d, gravityConstant);
         timer.step("ArtificialGravity");
 
-        computePositions(first, last, d, domain.box());
-        timer.step("UpdateQuantities");
-        updateSmoothingLength(first, last, d);
-        timer.step("UpdateSmoothingLength");
     }
 };
 
