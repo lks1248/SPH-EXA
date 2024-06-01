@@ -56,14 +56,14 @@ namespace sphexa
  * @param[in]     endIndex     last locally assigned particle index of buffers in @p d
  * @param[in]     y            Y coordinate array
  *
- * Returns the 350 local particles with higher density and the 350 local particles
+ * Returns the nAverage local particles with higher density and the nAverage local particles
  * with higher radius. Sort function uses greater to sort in reverse order so
- * that we can benefit from resize to cut the vectors down to 350.
+ * that we can benefit from resize to cut the vectors down to nAverage.
  */
 template<class T, class Th, class Tc>
 std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
-localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, const Th* h, const T* y, const Th* vy,
-                            const Th* markRamp)
+localVelocitiesRTGrowthRate(const int nAverage, size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, const Th* h,
+                            const T* y, const Th* vy, const Th* markRamp)
 {
     std::vector<AuxT<T>> localUp(endIndex - startIndex);
     std::vector<AuxT<T>> localDown(endIndex - startIndex);
@@ -85,8 +85,8 @@ localVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Tc ymin, Tc ymax
     std::sort(localUp.begin(), endUp, greaterRT());
     std::sort(localDown.begin(), endDown, lowerRT());
 
-    localUp.resize(350);
-    localDown.resize(350);
+    localUp.resize(nAverage);
+    localDown.resize(nAverage);
 
     return {localUp, localDown};
 }
@@ -105,6 +105,7 @@ template<typename T, class Dataset>
 util::tuple<T, T, T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, MPI_Comm comm,
                                                       const cstone::Box<T>& box)
 {
+    constexpr int nAverage = 1000;
 
     int rank;
     MPI_Comm_rank(comm, &rank);
@@ -119,13 +120,13 @@ util::tuple<T, T, T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t 
     if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
     {
         std::tie(std::get<0>(localRet), std::get<1>(localRet)) =
-            localGrowthRateRTGpu(startIndex, endIndex, box.ymin(), box.ymax(), rawPtr(d.devData.h), rawPtr(d.devData.y),
-                                 rawPtr(d.devData.vy), rawPtr(d.devData.markRamp));
+            localGrowthRateRTGpu(nAverage, startIndex, endIndex, box.ymin(), box.ymax(), rawPtr(d.devData.h),
+                                 rawPtr(d.devData.y), rawPtr(d.devData.vy), rawPtr(d.devData.markRamp));
     }
     else
     {
-        localRet = localVelocitiesRTGrowthRate(startIndex, endIndex, box.ymin(), box.ymax(), d.h.data(), d.y.data(),
-                                               d.vy.data(), d.markRamp.data());
+        localRet = localVelocitiesRTGrowthRate(nAverage, startIndex, endIndex, box.ymin(), box.ymax(), d.h.data(),
+                                               d.y.data(), d.vy.data(), d.markRamp.data());
     }
 
     std::vector<AuxT<T>> localUp   = util::get<0>(localRet);
@@ -134,7 +135,7 @@ util::tuple<T, T, T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t 
     int mpiranks;
 
     MPI_Comm_size(comm, &mpiranks);
-    size_t rootsize = 350 * mpiranks;
+    size_t rootsize = nAverage * mpiranks;
 
     std::vector<AuxT<T>> globalUp(rootsize);
     std::vector<AuxT<T>> globalDown(rootsize);
@@ -150,8 +151,8 @@ util::tuple<T, T, T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t 
     MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_AuxT_type);
     MPI_Type_commit(&mpi_AuxT_type);
 
-    MPI_Gather(localUp.data(), 350, mpi_AuxT_type, globalUp.data(), 350, mpi_AuxT_type, rootRank, comm);
-    MPI_Gather(localDown.data(), 350, mpi_AuxT_type, globalDown.data(), 350, mpi_AuxT_type, rootRank, comm);
+    MPI_Gather(localUp.data(), nAverage, mpi_AuxT_type, globalUp.data(), nAverage, mpi_AuxT_type, rootRank, comm);
+    MPI_Gather(localDown.data(), nAverage, mpi_AuxT_type, globalDown.data(), nAverage, mpi_AuxT_type, rootRank, comm);
 
     T vy_max = 0.;
     T vy_min = 0.;
@@ -164,17 +165,17 @@ util::tuple<T, T, T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t 
         std::sort(globalUp.begin(), newUpEnd, greaterRT());
         std::sort(globalDown.begin(), newDownEnd, lowerRT());
 
-        globalUp.resize(350);
-        globalDown.resize(350);
+        globalUp.resize(nAverage);
+        globalDown.resize(nAverage);
 
-        for (size_t i = 0; i < 350; i++)
+        for (size_t i = 0; i < nAverage; i++)
         {
             vy_max += globalUp[i].vel;
             vy_min += globalDown[i].vel;
         }
     }
 
-    return {vy_max / T(350.), vy_min / T(350.), globalUp[0].pos, globalDown[0].pos};
+    return {vy_max / T(nAverage), vy_min / T(nAverage), globalUp[0].pos, globalDown[0].pos};
 }
 
 //! @brief Observables that includes times and velocities Rayleigh-Taylor growth rate

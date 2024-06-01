@@ -196,13 +196,14 @@ struct MarkRampCond
             thrust::get<5>(p) = {y, vy};
         }
     }
-    Tc  ymin;
-    Tc  ymax;
+    Tc ymin;
+    Tc ymax;
 };
 
 template<class T, class Tc, class Th>
-std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y,
-                                                                            const Th* vy, const Th* markRamp)
+std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
+localGrowthRateRTGpu(const int nAverage, size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y,
+                     const Th* vy, const Th* markRamp)
 {
     thrust::device_vector<AuxT<T>> targetUp(last - first);
     thrust::device_vector<AuxT<T>> targetDown(last - first);
@@ -220,11 +221,11 @@ std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size
     thrust::sort(thrust::device, targetUp.begin(), endUp, greaterRT());
     thrust::sort(thrust::device, targetDown.begin(), endDown, lowerRT());
 
-    targetUp.resize(350);
-    targetDown.resize(350);
+    targetUp.resize(nAverage);
+    targetDown.resize(nAverage);
 
-    std::vector<AuxT<T>> retUp(350);
-    std::vector<AuxT<T>> retDown(3350);
+    std::vector<AuxT<T>> retUp(nAverage);
+    std::vector<AuxT<T>> retDown(nAverage);
     thrust::copy(targetUp.begin(), targetUp.end(), retUp.begin());
     thrust::copy(targetDown.begin(), targetDown.end(), retDown.begin());
 
@@ -233,7 +234,7 @@ std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size
 
 #define RTGROWTH(T, Tc, Th)                                                                                            \
     template std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(                              \
-        size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y, const Th* vy,          \
+        const int nAverage, size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y, const Th* vy,        \
         const Th* markRamp);
 
 RTGROWTH(double, double, double);

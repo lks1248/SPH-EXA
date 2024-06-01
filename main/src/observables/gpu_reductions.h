@@ -95,7 +95,7 @@ extern size_t survivorsGpu(const Tt* temp, const T* kx, const T* xmass, const Tm
 template<class T>
 struct AuxT
 {
-    T pos = T(0.0/0.0);
+    T pos = T(0.0 / 0.0);
     T vel;
 };
 
@@ -140,7 +140,7 @@ struct invalidAuxTEntry
  * @return
  */
 template<class T, class Tc, class Th>
-extern std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size_t first, size_t last, Tc ymin,
-                                                                                   Tc ymax, const Th* h, const T* y,
-                                                                                   const Th* vy, const Th* markRamp);
+extern std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
+localGrowthRateRTGpu(const int nAverage, size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y,
+                     const Th* vy, const Th* markRamp);
 } // namespace sphexa
