@@ -62,7 +62,7 @@ namespace sphexa
  */
 template<class T, class Th, class Tc>
 std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
-localVelocitiesRTGrowthRate(const int nAverage, size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, const Th* h,
+localVelocitiesRTGrowthRate(const size_t nAverage, size_t startIndex, size_t endIndex, Tc ymin, Tc ymax, const Th* h,
                             const T* y, const Th* vy, const Th* markRamp)
 {
     std::vector<AuxT<T>> localUp(endIndex - startIndex);
@@ -105,7 +105,7 @@ template<typename T, class Dataset>
 util::tuple<T, T, T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t endIndex, Dataset& d, MPI_Comm comm,
                                                       const cstone::Box<T>& box)
 {
-    constexpr int nAverage = 1000;
+    constexpr size_t nAverage = 1000;
 
     int rank;
     MPI_Comm_rank(comm, &rank);

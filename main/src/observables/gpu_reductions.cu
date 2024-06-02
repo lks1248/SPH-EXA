@@ -202,7 +202,7 @@ struct MarkRampCond
 
 template<class T, class Tc, class Th>
 std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
-localGrowthRateRTGpu(const int nAverage, size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y,
+localGrowthRateRTGpu(const size_t nAverage, size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y,
                      const Th* vy, const Th* markRamp)
 {
     thrust::device_vector<AuxT<T>> targetUp(last - first);
@@ -234,7 +234,7 @@ localGrowthRateRTGpu(const int nAverage, size_t first, size_t last, Tc ymin, Tc 
 
 #define RTGROWTH(T, Tc, Th)                                                                                            \
     template std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(                              \
-        const int nAverage, size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y, const Th* vy,        \
+        const size_t nAverage, size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y, const Th* vy,        \
         const Th* markRamp);
 
 RTGROWTH(double, double, double);
