@@ -201,9 +201,9 @@ struct MarkRampCond
 };
 
 template<class T, class Tc, class Th>
-std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
-localGrowthRateRTGpu(const size_t nAverage, size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y,
-                     const Th* vy, const Th* markRamp)
+std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size_t first, size_t last, Tc ymin,
+                                                                             Tc ymax, const Th* h, const T* y,
+                                                                             const Th* vy, const Th* markRamp)
 {
     thrust::device_vector<AuxT<T>> targetUp(last - first);
     thrust::device_vector<AuxT<T>> targetDown(last - first);
@@ -221,11 +221,11 @@ localGrowthRateRTGpu(const size_t nAverage, size_t first, size_t last, Tc ymin, 
     thrust::sort(thrust::device, targetUp.begin(), endUp, greaterRT());
     thrust::sort(thrust::device, targetDown.begin(), endDown, lowerRT());
 
-    targetUp.resize(nAverage);
-    targetDown.resize(nAverage);
+    targetUp.resize(RT_N_AVG);
+    targetDown.resize(RT_N_AVG);
 
-    std::vector<AuxT<T>> retUp(nAverage);
-    std::vector<AuxT<T>> retDown(nAverage);
+    std::vector<AuxT<T>> retUp(RT_N_AVG);
+    std::vector<AuxT<T>> retDown(RT_N_AVG);
     thrust::copy(targetUp.begin(), targetUp.end(), retUp.begin());
     thrust::copy(targetDown.begin(), targetDown.end(), retDown.begin());
 
@@ -233,9 +233,8 @@ localGrowthRateRTGpu(const size_t nAverage, size_t first, size_t last, Tc ymin, 
 }
 
 #define RTGROWTH(T, Tc, Th)                                                                                            \
-    template std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(                              \
-        const size_t nAverage, size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y, const Th* vy,        \
-        const Th* markRamp);
+    template std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(                             \
+        size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y, const Th* vy, const Th* markRamp);
 
 RTGROWTH(double, double, double);
 RTGROWTH(double, float, double);

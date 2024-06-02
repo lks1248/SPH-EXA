@@ -92,6 +92,8 @@ extern size_t survivorsGpu(const Tt* temp, const T* kx, const T* xmass, const Tm
  * @brief struct and sorting functors for the Rayleigh-Taylor Observable
  * @tparam T floating point type of coordinates and velocities
  */
+
+#define RT_N_AVG 1000
 template<class T>
 struct AuxT
 {
@@ -140,7 +142,7 @@ struct invalidAuxTEntry
  * @return
  */
 template<class T, class Tc, class Th>
-extern std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>>
-localGrowthRateRTGpu(const size_t nAverage, size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y,
-                     const Th* vy, const Th* markRamp);
+extern std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size_t first, size_t last, Tc ymin,
+                                                                                   Tc ymax, const Th* h, const T* y,
+                                                                                   const Th* vy, const Th* markRamp);
 } // namespace sphexa
