@@ -179,6 +179,7 @@ SURVIVORS(double, double, double);
 SURVIVORS(float, float, float);
 SURVIVORS(float, double, float);
 
+//! @brief functor to gather valid position/velocity pairs for Rayleigh-Taylor observable
 template<class T, class Tc, class Tm>
 struct MarkRampCond
 {
@@ -200,10 +201,11 @@ struct MarkRampCond
     Tc ymax;
 };
 
+//! @brief calculates the Rayleigh-Taylor observable on GPUs
 template<class T, class Tc, class Th>
-std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size_t first, size_t last, Tc ymin,
-                                                                             Tc ymax, const Th* h, const T* y,
-                                                                             const Th* vy, const Th* markRamp)
+std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size_t first, size_t last, Tc ymin, Tc ymax,
+                                                                            const Th* h, const T* y, const Th* vy,
+                                                                            const Th* markRamp)
 {
     thrust::device_vector<AuxT<T>> targetUp(last - first);
     thrust::device_vector<AuxT<T>> targetDown(last - first);
@@ -233,7 +235,7 @@ std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(size
 }
 
 #define RTGROWTH(T, Tc, Th)                                                                                            \
-    template std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(                             \
+    template std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localGrowthRateRTGpu(                              \
         size_t first, size_t last, Tc ymin, Tc ymax, const Th* h, const T* y, const Th* vy, const Th* markRamp);
 
 RTGROWTH(double, double, double);

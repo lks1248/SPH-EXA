@@ -31,17 +31,9 @@
 
 #pragma once
 
-#include <filesystem>
-#include <sstream>
-#include <variant>
-
-#include "cstone/fields/field_get.hpp"
 #include "sph/sph.hpp"
 #include "sph/boundary_forces.hpp"
-
-#include "ipropagator.hpp"
 #include "ve_hydro.hpp"
-#include "gravity_wrapper.hpp"
 
 namespace sphexa
 {
@@ -81,7 +73,6 @@ public:
         // fixedBoundaryForceCorrection(first, last, d, domain.box());
         artificialGravity(first, last, d, gravityConstant);
         timer.step("ArtificialGravity");
-
     }
 };
 

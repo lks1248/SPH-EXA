@@ -98,7 +98,7 @@ template<class T>
 struct AuxT
 {
     T pos = T(0.0 / 0.0);
-    T vel;
+    T vel = 0.0;
 };
 
 struct greaterRT

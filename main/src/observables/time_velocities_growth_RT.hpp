@@ -31,19 +31,14 @@
  *
  */
 
-#include <array>
 #include <mpi.h>
 #include <vector>
-#include <numeric>
 #include <algorithm>
 #include <cstddef>
 
 #include "conserved_quantities.hpp"
 #include "iobservables.hpp"
 #include "io/file_utils.hpp"
-#include "cstone/tree/definitions.h"
-#include "sph/particles_data.hpp"
-#include "sph/positions.hpp"
 #include "gpu_reductions.h"
 
 namespace sphexa
@@ -110,11 +105,6 @@ util::tuple<T, T, T, T> computeVelocitiesRTGrowthRate(size_t startIndex, size_t 
     MPI_Comm_rank(comm, &rank);
     int rootRank = 0;
 
-    if (!d.isAllocated("markRamp"))
-    {
-        if (rank == rootRank) { printf("Warning: MarkRamp was not allocated, please check Propagator choice\n"); }
-        return {0, 0, 0, 0};
-    }
     std::tuple<std::vector<AuxT<T>>, std::vector<AuxT<T>>> localRet;
     if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
     {

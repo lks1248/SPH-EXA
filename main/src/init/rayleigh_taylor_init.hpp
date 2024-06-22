@@ -35,8 +35,6 @@
 #pragma once
 
 #include "cstone/sfc/box.hpp"
-#include "cstone/sfc/sfc.hpp"
-#include "cstone/primitives/gather.hpp"
 #include "isim_init.hpp"
 
 #include "utils.hpp"
