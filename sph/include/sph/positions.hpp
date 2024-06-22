@@ -39,6 +39,8 @@
 
 #include "sph/sph_gpu.hpp"
 #include "sph/eos.hpp"
+#include "sph/table_lookup.hpp"
+
 
 namespace sph
 {
@@ -46,10 +48,10 @@ namespace sph
 //! @brief checks whether a particle is close to a fixed boundary and reflects the velocity if so
 template<class Tc, class Th>
 HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, cstone::Vec3<Tc>& V, const cstone::Vec3<Tc>& A,
-                               const cstone::Box<Tc>& box, const Th& hi, const double dt)
+                               const cstone::Box<Tc>& box, const Th& hi, const double dt, const Th* wh)
 {
-    double             threshold       = 0.05;
-    double             invTHold        = 1 / threshold;
+    float              threshold       = 0.05;
+    float              invTHold        = 1 / threshold;
     cstone::Vec3<bool> isBoundaryFixed = {
         box.boundaryX() == cstone::BoundaryType::fixed,
         box.boundaryY() == cstone::BoundaryType::fixed,
@@ -68,7 +70,8 @@ HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, cstone::Vec3<Tc>& V, co
             Th relDistanceMin = std::abs(boxMin[j] - dXj) / hi;
             Th minDistance    = relDistanceMin < relDistanceMax ? relDistanceMin : relDistanceMax;
 
-            if (minDistance < 2 * threshold) { V[j] *= -1 + invTHold * minDistance; }
+            // if (minDistance < 2 * threshold) { V[j] *= -1 + invTHold * minDistance; }
+            if (minDistance < 2 * threshold) { V[j] *= 1 - 2 * lt::lookup(wh, minDistance * invTHold); }
         }
     }
 }
@@ -88,14 +91,14 @@ HOST_DEVICE_FUN double energyUpdate(double u_old, double dt, double dt_m1, T1 du
 //! @brief Update positions according to Press (2nd order)
 template<class T, class Th>
 HOST_DEVICE_FUN auto positionUpdate(double dt, double dt_m1, cstone::Vec3<T> X, cstone::Vec3<T> A, cstone::Vec3<T> X_m1,
-                                    const cstone::Box<T>& box, bool anyFbc, const Th& hi)
+                                    const cstone::Box<T>& box, bool anyFbc, const Th& hi, const Th* wh)
 {
     double deltaA = dt + T(0.5) * dt_m1;
     double deltaB = T(0.5) * (dt + dt_m1);
 
     auto Val = X_m1 * (T(1) / dt_m1);
     auto V   = Val + A * deltaA;
-    if (anyFbc) { fbcAdjust(X, V, A, box, hi, dt); }
+    if (anyFbc) { fbcAdjust(X, V, A, box, hi, dt, wh); }
     double deltaC = deltaB / deltaA;
     auto   dX     = dt * Val + (V - Val) * dt * deltaC;
     X             = cstone::putInBox(X + dX, box);
@@ -120,7 +123,7 @@ void updatePositionsHost(size_t startIndex, size_t endIndex, Dataset& d, const c
         cstone::Vec3<T> X{d.x[i], d.y[i], d.z[i]};
         cstone::Vec3<T> X_m1{d.x_m1[i], d.y_m1[i], d.z_m1[i]};
         cstone::Vec3<T> V;
-        util::tie(X, V, X_m1) = positionUpdate(d.minDt, d.minDt_m1, X, A, X_m1, box, anyFBC, d.h[i]);
+        util::tie(X, V, X_m1) = positionUpdate(d.minDt, d.minDt_m1, X, A, X_m1, box, anyFBC, d.h[i], d.wh.data());
 
         util::tie(d.x[i], d.y[i], d.z[i])          = util::tie(X[0], X[1], X[2]);
         util::tie(d.x_m1[i], d.y_m1[i], d.z_m1[i]) = util::tie(X_m1[0], X_m1[1], X_m1[2]);
@@ -169,7 +172,7 @@ void computePositions(size_t startIndex, size_t endIndex, Dataset& d, const csto
                             rawPtr(d.devData.x_m1), rawPtr(d.devData.y_m1), rawPtr(d.devData.z_m1),
                             rawPtr(d.devData.ax), rawPtr(d.devData.ay), rawPtr(d.devData.az), rawPtr(d.devData.temp),
                             rawPtr(d.devData.u), rawPtr(d.devData.du), rawPtr(d.devData.du_m1), rawPtr(d.devData.h),
-                            d_mui, d.gamma, constCv, box);
+                            rawPtr(d.devData.wh), d_mui, d.gamma, constCv, box);
     }
     else
     {

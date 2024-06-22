@@ -54,7 +54,7 @@ extern void artificialGravity(size_t, size_t, Dataset& d, T grav);
 template<class Tc, class Tv, class Ta, class Tdu, class Tm1, class Tu, class Thydro>
 extern void computePositionsGpu(size_t first, size_t last, double dt, double dt_m1, Tc* x, Tc* y, Tc* z, Tv* vx, Tv* vy,
                                 Tv* vz, Tm1* x_m1, Tm1* y_m1, Tm1* z_m1, Ta* ax, Ta* ay, Ta* az, Tu* temp, Tu* u,
-                                Tdu* du, Tm1* du_m1, Thydro* h, Thydro* mui, Tc gamma, Tc constCv,
+                                Tdu* du, Tm1* du_m1, Thydro* h, Thydro* wh, Thydro* mui, Tc gamma, Tc constCv,
                                 const cstone::Box<Tc>& box);
 
 template<class Th>
