@@ -49,8 +49,8 @@ template<class Tc, class Th>
 HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, cstone::Vec3<Tc>& V, const cstone::Vec3<Tc>& A,
                                const cstone::Box<Tc>& box, const Th& hi, const double dt, const Th* wh)
 {
-    float              threshold       = 0.5;
-    float              invTHold        = 1 / threshold;
+    constexpr float    threshold       = 1.;
+    constexpr float    invTHold        = 1 / threshold;
     cstone::Vec3<bool> isBoundaryFixed = {
         box.boundaryX() == cstone::BoundaryType::fixed,
         box.boundaryY() == cstone::BoundaryType::fixed,
