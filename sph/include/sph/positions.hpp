@@ -70,7 +70,7 @@ HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, cstone::Vec3<Tc>& V, co
             Th minDistance    = relDistanceMin < relDistanceMax ? relDistanceMin : relDistanceMax;
 
             // if (minDistance < 2 * threshold) { V[j] *= -1 + invTHold * minDistance; }
-            if (minDistance < 2 * threshold) { V[j] *= 1 - lt::lookup(wh, minDistance * invTHold * Th(0.5)); }
+            if (minDistance < 2 * threshold) { V[j] *= 1 - lt::lookup(wh, minDistance * invTHold); }
         }
     }
 }
