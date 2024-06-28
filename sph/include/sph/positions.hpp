@@ -49,8 +49,8 @@ template<class Tc, class Th>
 HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, cstone::Vec3<Tc>& V, const cstone::Vec3<Tc>& A,
                                const cstone::Box<Tc>& box, const Th& hi, const double dt, const Th* wh)
 {
-    constexpr float    threshold       = 1.;
-    constexpr float    invTHold        = 1 / threshold;
+    constexpr Th       threshold       = 2.;
+    constexpr Th       invTHold        = 1 / threshold;
     cstone::Vec3<bool> isBoundaryFixed = {
         box.boundaryX() == cstone::BoundaryType::fixed,
         box.boundaryY() == cstone::BoundaryType::fixed,
@@ -63,14 +63,14 @@ HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, cstone::Vec3<Tc>& V, co
     {
         if (isBoundaryFixed[j])
         {
-            // Flip the velocity if integration would put the particle in the "critical" zone
+            // Adjust the velocity if integration would put the particle in the "critical" zone
             Tc dXj            = X[j] + V[j] * dt + 0.5 * A[j] * dt * dt;
             Th relDistanceMax = std::abs(boxMax[j] - dXj) / hi;
             Th relDistanceMin = std::abs(boxMin[j] - dXj) / hi;
             Th minDistance    = relDistanceMin < relDistanceMax ? relDistanceMin : relDistanceMax;
 
             // if (minDistance < 2 * threshold) { V[j] *= -1 + invTHold * minDistance; }
-            if (minDistance < 2 * threshold) { V[j] *= 1 - lt::lookup(wh, minDistance * invTHold); }
+            V[j] *= 1 - lt::lookup(wh, minDistance * invTHold);
         }
     }
 }
