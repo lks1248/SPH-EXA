@@ -33,14 +33,13 @@
 #include "cstone/findneighbors.hpp"
 #include "cstone/traversal/find_neighbors.cuh"
 
-#include <thrust/functional.h>
-#include <thrust/execution_policy.h>
-
-#include "sph_gpu.hpp"
+#include "sph/sph_gpu.hpp"
 #include "sph/particles_data.hpp"
-#include "additional_calculations_kern.hpp"
+#include "sph/hydro_ve/additional_fields_kern.hpp"
 
-namespace sph::cuda
+namespace sph
+{
+namespace cuda
 {
 
 using cstone::GpuConfig;
@@ -113,7 +112,5 @@ void artificialGravity(size_t first, size_t last, Dataset& d, T grav)
     thrust::for_each(thrust::device, begin, end, thrust::placeholders::_1 -= grav);
 }
 
-template void artificialGravity(size_t, size_t, sphexa::ParticlesData<cstone::GpuTag>& d, double);
-template void artificialGravity(size_t, size_t, sphexa::ParticlesData<cstone::GpuTag>& d, float);
-
-} // namespace sph::cuda
+} // namespace cuda
+} // namespace sph

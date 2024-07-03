@@ -32,7 +32,6 @@
 #pragma once
 
 #include "sph/sph.hpp"
-#include "sph/boundary_forces.hpp"
 #include "ve_hydro.hpp"
 
 namespace sphexa
