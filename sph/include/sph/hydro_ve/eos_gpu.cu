@@ -60,7 +60,7 @@ __global__ void cudaEOS(size_t firstParticle, size_t lastParticle, Tm mui, const
 template<class Tt, class Tm, class Thydro>
 void computeEOS(size_t firstParticle, size_t lastParticle, Tm mui, const Thydro* gamma, const Tt* temp, const Tm* m,
                 const Thydro* kx, const Thydro* xm, const Thydro* gradh, Thydro* prho, Thydro* c, Thydro* rho,
-                Thydro* p);
+                Thydro* p)
 {
     if (firstParticle == lastParticle) { return; }
     unsigned numThreads = 256;
