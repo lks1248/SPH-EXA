@@ -84,7 +84,7 @@ __global__ void driftKernel(GroupView grp, float dt, float dt_back, util::array<
         if (gamma != nullptr)
         {
             if (mui != nullptr) { cv = idealGasCv(mui[i], gamma[i]); }
-            cv = idealGasCv(muiConst, gamma[i])
+            cv = idealGasCv(muiConst, gamma[i]);
         }
         else if (mui != nullptr) { cv = idealGasCv(mui[i], gammaConst); }
         else { cv = idealGasCv(muiConst, gammaConst); }
@@ -174,7 +174,7 @@ __global__ void computePositionsKernel(GroupView grp, float dt, util::array<floa
         if (gamma != nullptr)
         {
             if (mui != nullptr) { cv = idealGasCv(mui[i], gamma[i]); }
-            cv = idealGasCv(muiConst, gamma[i])
+            cv = idealGasCv(muiConst, gamma[i]);
         }
         else if (mui != nullptr) { cv = idealGasCv(mui[i], gammaConst); }
         else { cv = idealGasCv(muiConst, gammaConst); }
