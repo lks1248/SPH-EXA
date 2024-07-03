@@ -32,6 +32,7 @@
 
 #pragma once
 
+#include "cstone/cuda/cuda_stubs.h"
 #include "cstone/sfc/box.hpp"
 #include "cstone/util/array.hpp"
 #include "cstone/util/tuple.hpp"
@@ -124,14 +125,15 @@ void updatePositionsHost(size_t startIndex, size_t endIndex, Dataset& d, const c
 template<class Dataset>
 void updateTempHost(size_t startIndex, size_t endIndex, Dataset& d)
 {
-    using Tdu    = decltype(d.du[0]);
-    bool haveMui = !d.mui.empty();
-    auto constCv = idealGasCv(d.muiConst, d.gamma);
+    using Tdu      = decltype(d.du[0]);
+    bool haveMui   = !d.mui.empty();
+    bool haveGamma = !d.gamma.empty();
+    auto constCv   = idealGasCv(d.muiConst, d.gammaConst);
 
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; i++)
     {
-        auto cv    = haveMui ? idealGasCv(d.mui[i], d.gamma) : constCv;
+        auto cv = haveGamma ? haveMui ? idealGasCv(d.mui[i], d.gamma[i]) : idealGasCv(d.muiConst, d.gamma[i]) : constCv;
         auto u_old = cv * d.temp[i];
         d.temp[i]  = energyUpdate(u_old, d.minDt, d.minDt_m1, d.du[i], Tdu(d.du_m1[i])) / cv;
         d.du_m1[i] = d.du[i];
@@ -165,14 +167,15 @@ void driftPositions(const GroupView& grp, Dataset& d, float dt_forward, float dt
 {
     if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
     {
-        auto  constCv = d.mui.empty() ? idealGasCv(d.muiConst, d.gamma) : -1.0;
+        //        auto  constCv = d.mui.empty() ? idealGasCv(d.muiConst, d.gammaConst) : -1.0;
         auto* d_mui   = d.mui.empty() ? nullptr : rawPtr(d.devData.mui);
+        auto* d_gamma = d.gamma.empty() ? nullptr : rawPtr(d.devData.gamma);
 
         driftPositionsGpu(grp, dt_forward, dt_backward, dt_prevRung, rawPtr(d.devData.x), rawPtr(d.devData.y),
                           rawPtr(d.devData.z), rawPtr(d.devData.vx), rawPtr(d.devData.vy), rawPtr(d.devData.vz),
                           rawPtr(d.devData.x_m1), rawPtr(d.devData.y_m1), rawPtr(d.devData.z_m1), rawPtr(d.devData.ax),
                           rawPtr(d.devData.ay), rawPtr(d.devData.az), rung, rawPtr(d.devData.temp), rawPtr(d.devData.u),
-                          rawPtr(d.devData.du), rawPtr(d.devData.du_m1), d_mui, d.gamma, constCv);
+                          rawPtr(d.devData.du), rawPtr(d.devData.du_m1), d_mui, d_gamma, d.muiConst, d.gammaConst);
     }
 }
 
@@ -182,15 +185,16 @@ void computePositions(const GroupView& grp, Dataset& d, const cstone::Box<T>& bo
 {
     if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
     {
-        T     constCv = d.mui.empty() ? idealGasCv(d.muiConst, d.gamma) : -1.0;
+        //        T     constCv = d.mui.empty() ? idealGasCv(d.muiConst, d.gammaConst) : -1.0;
         auto* d_mui   = d.mui.empty() ? nullptr : rawPtr(d.devData.mui);
+        auto* d_gamma = d.gamma.empty() ? nullptr : rawPtr(d.devData.gamma);
 
         computePositionsGpu(grp, dt_forward, dt_m1, rawPtr(d.devData.x), rawPtr(d.devData.y), rawPtr(d.devData.z),
                             rawPtr(d.devData.vx), rawPtr(d.devData.vy), rawPtr(d.devData.vz), rawPtr(d.devData.x_m1),
                             rawPtr(d.devData.y_m1), rawPtr(d.devData.z_m1), rawPtr(d.devData.ax), rawPtr(d.devData.ay),
                             rawPtr(d.devData.az), rung, rawPtr(d.devData.temp), rawPtr(d.devData.u),
-                            rawPtr(d.devData.du), rawPtr(d.devData.du_m1), rawPtr(d.devData.h), d_mui, d.gamma, constCv,
-                            box);
+                            rawPtr(d.devData.du), rawPtr(d.devData.du_m1), rawPtr(d.devData.h), d_mui, d_gamma,
+                            d.muiConst, d.gammaConst, box);
     }
     else
     {

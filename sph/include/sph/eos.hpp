@@ -10,8 +10,8 @@ namespace sph
 {
 
 //! @brief returns the heat capacity for given mean molecular weight
-template<class T1, class T2>
-HOST_DEVICE_FUN constexpr T1 idealGasCv(T1 mui, T2 gamma)
+template<class T1>
+HOST_DEVICE_FUN constexpr T1 idealGasCv(T1 mui, T1 gamma)
 {
     constexpr T1 R = 8.317e7;
     return R / mui / (gamma - T1(1));
@@ -28,7 +28,7 @@ HOST_DEVICE_FUN constexpr T1 idealGasCv(T1 mui, T2 gamma)
  * Returns pressure, speed of sound
  */
 template<class T1, class T2, class T3>
-HOST_DEVICE_FUN auto idealGasEOS(T1 temp, T2 rho, T3 mui, T1 gamma)
+HOST_DEVICE_FUN auto idealGasEOS(T1 temp, T2 rho, T3 mui, T2 gamma)
 {
     using Tc = std::common_type_t<T1, T2, T3>;
 

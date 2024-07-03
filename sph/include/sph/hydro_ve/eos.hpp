@@ -32,6 +32,7 @@
 
 #pragma once
 
+#include "cstone/cuda/cuda_stubs.h"
 #include "sph/sph_gpu.hpp"
 #include "sph/eos.hpp"
 
@@ -57,6 +58,7 @@ void computeEOS_Impl(size_t startIndex, size_t endIndex, Dataset& d)
     const auto* kx    = d.kx.data();
     const auto* xm    = d.xm.data();
     const auto* gradh = d.gradh.data();
+    const auto* gamma = d.gamma.data();
 
     auto* prho = d.prho.data();
     auto* c    = d.c.data();
@@ -68,7 +70,7 @@ void computeEOS_Impl(size_t startIndex, size_t endIndex, Dataset& d)
     for (size_t i = startIndex; i < endIndex; ++i)
     {
         auto rho      = kx[i] * m[i] / xm[i];
-        auto [pi, ci] = idealGasEOS(temp[i], rho, d.muiConst, d.gamma);
+        auto [pi, ci] = idealGasEOS(temp[i], rho, d.muiConst, gamma[i]);
         prho[i]       = pi / (kx[i] * m[i] * m[i] * gradh[i]);
         c[i]          = ci;
         if (storeRho) { d.rho[i] = rho; }
@@ -81,9 +83,9 @@ void computeEOS(size_t startIndex, size_t endIndex, Dataset& d)
 {
     if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
     {
-        cuda::computeEOS(startIndex, endIndex, d.muiConst, d.gamma, rawPtr(d.devData.temp), rawPtr(d.devData.m),
-                         rawPtr(d.devData.kx), rawPtr(d.devData.xm), rawPtr(d.devData.gradh), rawPtr(d.devData.prho),
-                         rawPtr(d.devData.c), rawPtr(d.devData.rho), rawPtr(d.devData.p));
+        cuda::computeEOS(startIndex, endIndex, d.muiConst, rawPtr(d.devData.gamma), rawPtr(d.devData.temp),
+                         rawPtr(d.devData.m), rawPtr(d.devData.kx), rawPtr(d.devData.xm), rawPtr(d.devData.gradh),
+                         rawPtr(d.devData.prho), rawPtr(d.devData.c), rawPtr(d.devData.rho), rawPtr(d.devData.p));
     }
     else { computeEOS_Impl(startIndex, endIndex, d); }
 }

@@ -128,7 +128,7 @@ public:
                 "kx was empty. Wind Shock surviving fraction is only supported with volume elements (--prop ve)\n");
         }
 
-        T    tempWind       = uWind * sph::idealGasCv(d.muiConst, d.gamma);
+        T    tempWind       = uWind * sph::idealGasCv(d.muiConst, d.gammaConst);
         auto bubbleFraction = calculateSurvivingFraction(firstIndex, lastIndex, rhoBubble, tempWind, initialMass, d);
         int  rank;
         MPI_Comm_rank(simData.comm, &rank);

@@ -113,10 +113,10 @@ public:
     RealType etaAcc{0.2};
 
     //! @brief adiabatic index
-    RealType gamma{5.0 / 3.0};
+    HydroType gammaConst{5.0 / 3.0};
 
     //! @brief mean molecular weight of ions for models that use one value for all particles
-    Tmass muiConst{10.0};
+    HydroType muiConst{10.0};
 
     // AV switches floor and ceiling
     HydroType alphamin{0.05};
@@ -177,7 +177,7 @@ public:
         optionalIO("Kcour", &Kcour, 1);
         optionalIO("Krho", &Krho, 1);
         ar->stepAttribute("gravConstant", &g, 1);
-        optionalIO("gamma", &gamma, 1);
+        optionalIO("gammaConst", &gammaConst, 1);
         optionalIO("eps", &eps, 1);
         optionalIO("etaAcc", &etaAcc, 1);
         optionalIO("muiConst", &muiConst, 1);
@@ -216,6 +216,7 @@ public:
     FieldVector<Tmass>     m;                                  // Mass
     FieldVector<HydroType> c;                                  // Speed of sound
     FieldVector<HydroType> cv;                                 // Specific heat
+    FieldVector<HydroType> gamma;                              // Adiabatic Index
     FieldVector<HydroType> mue, mui;                           // mean molecular weight (electrons, ions)
     FieldVector<HydroType> divv, curlv;                        // Div(velocity), Curl(velocity)
     FieldVector<HydroType> ax, ay, az;                         // acceleration
@@ -230,7 +231,7 @@ public:
     FieldVector<unsigned>  nc;                                 // number of neighbors of each particle
     FieldVector<HydroType> dV11, dV12, dV13, dV22, dV23, dV33; // Velocity gradient components
     FieldVector<HydroType> markRamp; //  switch between crossed and uncrossed versions of the SPH equations
-    FieldVector<uint8_t>   rung;                               // rung per particle of previous timestep
+    FieldVector<uint8_t>   rung;     // rung per particle of previous timestep
 
     //! @brief Indices of neighbors for each particle, length is number of assigned particles * ngmax. CPU version only.
     std::vector<cstone::LocalIndex>         neighbors;
@@ -245,10 +246,11 @@ public:
      * Name of each field as string for use e.g in HDF5 output. Order has to correspond to what's returned by data().
      */
     inline static constexpr std::array fieldNames{
-        "x",     "y",    "z",   "x_m1", "y_m1", "z_m1", "vx",   "vy",   "vz",    "rho",  "u",     "p",
-        "prho", "tdpdTrho", "h",    "m",   "c",    "ax",   "ay",   "az",   "du",   "du_m1", "c11",  "c12",   "c13",
-        "c22",   "c23",  "c33", "mue",  "mui",  "temp", "cv",   "xm",   "kx",    "divv", "curlv", "alpha",
-        "gradh", "keys", "nc",  "dV11", "dV12", "dV13", "dV22", "dV23", "dV33", "markRamp", "rung"};
+        "x",    "y",     "z",     "x_m1",     "y_m1", "z_m1", "vx",    "vy",       "vz",    "rho",
+        "u",    "p",     "prho",  "tdpdTrho", "h",    "m",    "c",     "ax",       "ay",    "az",
+        "du",   "du_m1", "c11",   "c12",      "c13",  "c22",  "c23",   "c33",      "mue",   "mui",
+        "temp", "cv",    "gamma", "xm",       "kx",   "divv", "curlv", "alpha",    "gradh", "keys",
+        "nc",   "dV11",  "dV12",  "dV13",     "dV22", "dV23", "dV33",  "markRamp", "rung"};
 
     //! @brief dataset prefix to be prepended to fieldNames for structured output
     static const inline std::string prefix{};
@@ -262,10 +264,10 @@ public:
      */
     auto dataTuple()
     {
-        auto ret = std::tie(x, y, z, x_m1, y_m1, z_m1, vx, vy, vz, rho, u, p, prho, tdpdTrho, h, m, c, ax, ay, az, du, du_m1, c11,
-                            c12, c13, c22, c23, c33, mue, mui, temp, cv, xm, kx, divv, curlv, alpha, gradh, keys, nc,
-                            dV11, dV12, dV13, dV22, dV23, dV33, markRamp, rung);
-
+        auto ret = std::tie(x, y, z, x_m1, y_m1, z_m1, vx, vy, vz, rho, u, p, prho, tdpdTrho, h, m, c, ax, ay, az, du,
+                            du_m1, c11, c12, c13, c22, c23, c33, mue, mui, temp, cv, gamma, xm, kx, divv, curlv, alpha,
+                            gradh, keys, nc, dV11, dV12, dV13, dV22, dV23, dV33, markRamp, rung);
+#if defined(__clang__) || __GNUC__ > 11
         static_assert(std::tuple_size_v<decltype(ret)> == fieldNames.size());
 #endif
         return ret;

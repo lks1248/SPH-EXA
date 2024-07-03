@@ -47,7 +47,8 @@ template<class Tc, class Thydro, class Tm1, class Tdu>
 __global__ void driftKernel(GroupView grp, float dt, float dt_back, util::array<float, Timestep::maxNumRungs> dt_m1,
                             Tc* x, Tc* y, Tc* z, Thydro* vx, Thydro* vy, Thydro* vz, const Tm1* x_m1, const Tm1* y_m1,
                             const Tm1* z_m1, const Thydro* ax, const Thydro* ay, const Thydro* az, const uint8_t* rung,
-                            Tc* temp, Tc* u, Tdu* du, Tm1* du_m1, Thydro* mui, Tc gamma, Tc constCv)
+                            Tc* temp, Tc* u, Tdu* du, Tm1* du_m1, Thydro* mui, Thydro* gamma, Thydro muiConst,
+                            Thydro gammaConst)
 {
     LocalIndex laneIdx = threadIdx.x & (GpuConfig::warpSize - 1);
     LocalIndex warpIdx = (blockDim.x * blockIdx.x + threadIdx.x) >> GpuConfig::warpSizeLog2;
@@ -77,9 +78,19 @@ __global__ void driftKernel(GroupView grp, float dt, float dt_back, util::array<
 
     if (temp != nullptr)
     {
-        Thydro cv      = (constCv < 0) ? idealGasCv(mui[i], gamma) : constCv;
-        auto   u_recov = energyUpdate(Tc(temp[i] * cv), -dt_back, dt_m1_rung, du[i], Tdu(du_m1[i]));
-        temp[i]        = energyUpdate(u_recov, dt, dt_m1_rung, du[i], Tdu(du_m1[i])) / cv;
+        //        Thydro cv    = (constCv < 0) ? idealGasCv(mui[i], gamma) : constCv;
+        Thydro cv;
+
+        if (gamma != nullptr)
+        {
+            if (mui != nullptr) { cv = idealGasCv(mui[i], gamma[i]); }
+            cv = idealGasCv(muiConst, gamma[i])
+        }
+        else if (mui != nullptr) { cv = idealGasCv(mui[i], gammaConst); }
+        else { cv = idealGasCv(muiConst, gammaConst); }
+
+        auto u_recov = energyUpdate(Tc(temp[i] * cv), -dt_back, dt_m1_rung, du[i], Tdu(du_m1[i]));
+        temp[i]      = energyUpdate(u_recov, dt, dt_m1_rung, du[i], Tdu(du_m1[i])) / cv;
     }
     else if (u != nullptr)
     {
@@ -92,7 +103,8 @@ template<class Tc, class Thydro, class Tm1, class Tdu>
 void driftPositionsGpu(const GroupView& grp, float dt, float dt_back, util::array<float, Timestep::maxNumRungs> dt_m1,
                        Tc* x, Tc* y, Tc* z, Thydro* vx, Thydro* vy, Thydro* vz, const Tm1* x_m1, const Tm1* y_m1,
                        const Tm1* z_m1, const Thydro* ax, const Thydro* ay, const Thydro* az, const uint8_t* rung,
-                       Tc* temp, Tc* u, Tdu* du, Tm1* du_m1, Thydro* mui, Tc gamma, Tc constCv)
+                       Tc* temp, Tc* u, Tdu* du, Tm1* du_m1, Thydro* mui, Thydro* gamma, Thydro muiConst,
+                       Thydro gammaConst)
 {
     unsigned numThreads       = 256;
     unsigned numWarpsPerBlock = numThreads / GpuConfig::warpSize;
@@ -104,11 +116,11 @@ void driftPositionsGpu(const GroupView& grp, float dt, float dt_back, util::arra
 }
 
 #define DRIFT_GPU(Tc, Thydro, Tm1, Tdu)                                                                                \
-    template void driftPositionsGpu(const GroupView& grp, float dt, float dt_back,                                     \
-                                    util::array<float, Timestep::maxNumRungs> dt_m1, Tc* x, Tc* y, Tc* z, Thydro* vx,  \
-                                    Thydro* vy, Thydro* vz, const Tm1* x_m1, const Tm1* y_m1, const Tm1* z_m1,         \
-                                    const Thydro* ax, const Thydro* ay, const Thydro* az, const uint8_t* rung,         \
-                                    Tc* temp, Tc* u, Tdu* du, Tm1* du_m1, Thydro* mui, Tc gamma, Tc constCv)
+    template void driftPositionsGpu(                                                                                   \
+        const GroupView& grp, float dt, float dt_back, util::array<float, Timestep::maxNumRungs> dt_m1, Tc* x, Tc* y,  \
+        Tc* z, Thydro* vx, Thydro* vy, Thydro* vz, const Tm1* x_m1, const Tm1* y_m1, const Tm1* z_m1,                  \
+        const Thydro* ax, const Thydro* ay, const Thydro* az, const uint8_t* rung, Tc* temp, Tc* u, Tdu* du,           \
+        Tm1* du_m1, Thydro* mui, Thydro* gamma, Thydro muiConst, Thydro gammaConst)
 
 DRIFT_GPU(double, double, double, double);
 DRIFT_GPU(double, double, float, double);
@@ -119,7 +131,8 @@ template<class Tc, class Tv, class Ta, class Tdu, class Tm1, class Tt, class Thy
 __global__ void computePositionsKernel(GroupView grp, float dt, util::array<float, Timestep::maxNumRungs> dt_m1, Tc* x,
                                        Tc* y, Tc* z, Tv* vx, Tv* vy, Tv* vz, Tm1* x_m1, Tm1* y_m1, Tm1* z_m1, Ta* ax,
                                        Ta* ay, Ta* az, const uint8_t* rung, Tt* temp, Tt* u, Tdu* du, Tm1* du_m1,
-                                       Thydro* h, Thydro* mui, Tc gamma, Tc constCv, const cstone::Box<Tc> box)
+                                       Thydro* h, Thydro* mui, Thydro* gamma, Thydro muiConst, Thydro gammaConst,
+                                       const cstone::Box<Tc> box)
 {
     LocalIndex laneIdx = threadIdx.x & (GpuConfig::warpSize - 1);
     LocalIndex warpIdx = (blockDim.x * blockIdx.x + threadIdx.x) >> GpuConfig::warpSizeLog2;
@@ -155,9 +168,19 @@ __global__ void computePositionsKernel(GroupView grp, float dt, util::array<floa
 
     if (temp != nullptr)
     {
-        Thydro cv    = (constCv < 0) ? idealGasCv(mui[i], gamma) : constCv;
-        auto   u_old = temp[i] * cv;
-        temp[i]      = energyUpdate(u_old, dt, dt_m1_rung, du[i], Tdu(du_m1[i])) / cv;
+        //        Thydro cv    = (constCv < 0) ? idealGasCv(mui[i], gamma) : constCv;
+        Thydro cv;
+
+        if (gamma != nullptr)
+        {
+            if (mui != nullptr) { cv = idealGasCv(mui[i], gamma[i]); }
+            cv = idealGasCv(muiConst, gamma[i])
+        }
+        else if (mui != nullptr) { cv = idealGasCv(mui[i], gammaConst); }
+        else { cv = idealGasCv(muiConst, gammaConst); }
+
+        auto u_old = temp[i] * cv;
+        temp[i]    = energyUpdate(u_old, dt, dt_m1_rung, du[i], Tdu(du_m1[i])) / cv;
     }
     else if (u != nullptr) { u[i] = energyUpdate(u[i], dt, dt_m1_rung, du[i], Tdu(du_m1[i])); }
     du_m1[i] = du[i];
@@ -166,8 +189,8 @@ __global__ void computePositionsKernel(GroupView grp, float dt, util::array<floa
 template<class Tc, class Tv, class Ta, class Tdu, class Tm1, class Tt, class Thydro>
 void computePositionsGpu(const GroupView& grp, float dt, util::array<float, Timestep::maxNumRungs> dt_m1, Tc* x, Tc* y,
                          Tc* z, Tv* vx, Tv* vy, Tv* vz, Tm1* x_m1, Tm1* y_m1, Tm1* z_m1, Ta* ax, Ta* ay, Ta* az,
-                         const uint8_t* rung, Tt* temp, Tt* u, Tdu* du, Tm1* du_m1, Thydro* h, Thydro* mui, Tc gamma,
-                         Tc constCv, const cstone::Box<Tc>& box)
+                         const uint8_t* rung, Tt* temp, Tt* u, Tdu* du, Tm1* du_m1, Thydro* h, Thydro* mui,
+                         Thydro* gamma, Thydro muiConst, Thydro gammaConst, const cstone::Box<Tc>& box)
 {
     unsigned numThreads       = 256;
     unsigned numWarpsPerBlock = numThreads / GpuConfig::warpSize;
@@ -179,10 +202,11 @@ void computePositionsGpu(const GroupView& grp, float dt, util::array<float, Time
 }
 
 #define POS_GPU(Tc, Tv, Ta, Tdu, Tm1, Tt, Thydro)                                                                      \
-    template void computePositionsGpu(                                                                                 \
-        const GroupView& grp, float dt, util::array<float, Timestep::maxNumRungs> dt_m1, Tc* x, Tc* y, Tc* z, Tv* vx,  \
-        Tv* vy, Tv* vz, Tm1* x_m1, Tm1* y_m1, Tm1* z_m1, Ta* ax, Ta* ay, Ta* az, const uint8_t* rung, Tt* temp, Tt* u, \
-        Tdu* du, Tm1* du_m1, Thydro* h, Thydro* mui, Tc gamma, Tc constCv, const cstone::Box<Tc>& box)
+    template void computePositionsGpu(const GroupView& grp, float dt, util::array<float, Timestep::maxNumRungs> dt_m1, \
+                                      Tc* x, Tc* y, Tc* z, Tv* vx, Tv* vy, Tv* vz, Tm1* x_m1, Tm1* y_m1, Tm1* z_m1,    \
+                                      Ta* ax, Ta* ay, Ta* az, const uint8_t* rung, Tt* temp, Tt* u, Tdu* du,           \
+                                      Tm1* du_m1, Thydro* h, Thydro* mui, Thydro* gamma, Thydro muiConst,              \
+                                      Thydro gammaConst, const cstone::Box<Tc>& box)
 
 //        Tc      Tv     Ta      Tdu     Tm1     Tt      Thydro
 POS_GPU(double, double, double, double, double, double, double);
