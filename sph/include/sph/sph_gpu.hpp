@@ -51,7 +51,7 @@ extern void computeEOS(size_t, size_t, Thydro mui, const Thydro* gamma, const Tu
                        const Thydro*, const Thydro*, Thydro*, Thydro*, Thydro*, Thydro*);
 
 template<class T, class Dataset>
-extern void computeMarkRamp(size_t, size_t, Dataset& d, const cstone::Box<typename Dataset::RealType>&);
+extern void computeMarkRamp(const GroupView& grp, Dataset& d, const cstone::Box<typename Dataset::RealType>&);
 
 } // namespace cuda
 
