@@ -41,9 +41,9 @@ namespace sph
 namespace cuda
 {
 
-template<class Tt, class Trho, class Tp, class Tc>
-__global__ void cudaEOS_HydroStd(size_t firstParticle, size_t lastParticle, Tc mui, Tc gamma, const Tt* temp,
-                                 const Trho* m, Trho* rho, Tp* p, Tc* c)
+template<class Tt, class Tm, class Th>
+__global__ void cudaEOS_HydroStd(size_t firstParticle, size_t lastParticle, Th mui, Th gamma, const Tt* temp,
+                                 const Tm* m, Th* rho, Th* p, Th* c)
 {
     unsigned i = firstParticle + blockDim.x * blockIdx.x + threadIdx.x;
     if (i >= lastParticle) return;
@@ -51,9 +51,9 @@ __global__ void cudaEOS_HydroStd(size_t firstParticle, size_t lastParticle, Tc m
     util::tie(p[i], c[i]) = idealGasEOS(temp[i], rho[i], mui, gamma);
 }
 
-template<class Tt, class Trho, class Tp, class Tc>
-void computeEOS_HydroStd(size_t firstParticle, size_t lastParticle, Tc mui, Tc gamma, const Tt* temp, const Trho* m,
-                         Trho* rho, Tp* p, Tc* c)
+template<class Tt, class Tm, class Th>
+void computeEOS_HydroStd(size_t firstParticle, size_t lastParticle, Th mui, Th gamma, const Tt* temp, const Tm* m,
+                         Th* rho, Th* p, Th* c)
 {
     if (firstParticle == lastParticle) { return; }
     unsigned numThreads = 256;

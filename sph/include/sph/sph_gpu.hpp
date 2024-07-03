@@ -43,15 +43,15 @@ extern void computeAVswitches(const GroupView&, Dataset& d, const cstone::Box<ty
 template<bool avClean, class Dataset>
 extern void computeMomentumEnergy(const GroupView&, float*, Dataset&, const cstone::Box<typename Dataset::RealType>&);
 
-template<class Tu, class Trho, class Tp, class Tc>
-extern void computeEOS_HydroStd(size_t, size_t, Trho, Tu, const Tu*, const Trho* m, Trho*, Tp*, Tc*);
+template<class Tt, class Tm, class Th>
+extern void computeEOS_HydroStd(size_t, size_t, Th, Th, const Tt*, const Tm* m, Th*, Th*, Th*);
 
 template<class Tu, class Tm, class Thydro>
 extern void computeEOS(size_t, size_t, Thydro mui, const Thydro* gamma, const Tu*, const Tm*, const Thydro*,
                        const Thydro*, const Thydro*, Thydro*, Thydro*, Thydro*, Thydro*);
 
 template<class T, class Dataset>
-extern void computeMarkRamp(const GroupView& grp, Dataset& d, const cstone::Box<typename Dataset::RealType>&);
+extern void computeMarkRamp(Dataset& d, const cstone::Box<typename Dataset::RealType>&);
 
 } // namespace cuda
 
