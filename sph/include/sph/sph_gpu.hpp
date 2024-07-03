@@ -50,8 +50,8 @@ template<class Tu, class Tm, class Thydro>
 extern void computeEOS(size_t, size_t, Tm mui, Tu gamma, const Tu*, const Tm*, const Thydro*, const Thydro*,
                        const Thydro*, Thydro*, Thydro*, Thydro*, Thydro*);
 
-template<class Dataset>
-extern void computeMarkRamp(size_t, size_t, Dataset& d, const cstone::Box<typename Dataset::RealType>&);
+template<class T, class Dataset>
+extern void computeMarkRamp(const GroupView& grp, Dataset& d, const cstone::Box<typename Dataset::RealType>&);
 
 template<class T, class Dataset>
 extern void artificialGravity(size_t, size_t, Dataset& d, T grav);
