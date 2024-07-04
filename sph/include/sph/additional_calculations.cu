@@ -33,6 +33,9 @@
 #include "cstone/findneighbors.hpp"
 #include "cstone/traversal/find_neighbors.cuh"
 
+#include <thrust/functional.h>
+#include <thrust/execution_policy.h>
+
 #include "sph/sph_gpu.hpp"
 #include "sph/particles_data.hpp"
 #include "additional_calculations_kern.hpp"
@@ -98,6 +101,19 @@ void computeMarkRamp(const GroupView& grp, Dataset& d, const cstone::Box<typenam
 
 template void computeMarkRamp(const GroupView& grp, sphexa::ParticlesData<cstone::GpuTag>& d,
                               const cstone::Box<SphTypes::CoordinateType>&);
+
+/*!
+ * @brief artificial gravity for the Rayleigh-Taylor test in form of constant acceleration
+ * @param grav the gravity constant
+ */
+template<class T, class Dataset>
+void artificialGravity(size_t first, size_t last, Dataset& d, T grav)
+{
+    auto begin = rawPtr(d.devData.ay) + first;
+    auto end   = rawPtr(d.devData.ay) + last;
+    thrust::for_each(thrust::device, begin, end, thrust::placeholders::_1 -= grav);
+}
+
 
 } // namespace cuda
 } // namespace sph
