@@ -35,7 +35,7 @@
 
 #include "sph/sph_gpu.hpp"
 #include "sph/particles_data.hpp"
-#include "sph/hydro_ve/additional_fields_kern.hpp"
+#include "additional_calculations_kern.hpp"
 
 namespace sph
 {
