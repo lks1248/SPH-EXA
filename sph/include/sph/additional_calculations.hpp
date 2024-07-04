@@ -33,6 +33,7 @@
 #pragma once
 
 #include "additional_calculations_kern.hpp"
+#include "sph_gpu.hpp"
 
 namespace sph
 {

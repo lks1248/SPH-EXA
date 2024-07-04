@@ -114,6 +114,8 @@ void artificialGravity(size_t first, size_t last, Dataset& d, T grav)
     thrust::for_each(thrust::device, begin, end, thrust::placeholders::_1 -= grav);
 }
 
+template void artificialGravity(size_t, size_t, sphexa::ParticlesData<cstone::GpuTag>& d, double);
+template void artificialGravity(size_t, size_t, sphexa::ParticlesData<cstone::GpuTag>& d, float);
 
 } // namespace cuda
 } // namespace sph
