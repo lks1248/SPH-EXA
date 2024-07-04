@@ -39,6 +39,7 @@
 #include "std_hydro.hpp"
 #include "ve_hydro.hpp"
 #include "rayleigh_taylor_ve.hpp"
+#include "ve_hydro_bdt.hpp"
 #ifdef SPH_EXA_HAVE_GRACKLE
 #include "std_hydro_grackle.hpp"
 #endif
@@ -56,6 +57,11 @@ propagatorFactory(const std::string& choice, bool avClean, std::ostream& output,
         if (avClean) { return std::make_unique<HydroVeProp<true, DomainType, ParticleDataType>>(output, rank); }
         else { return std::make_unique<HydroVeProp<false, DomainType, ParticleDataType>>(output, rank); }
     }
+    if (choice == "ve-bdt")
+    {
+        if (avClean) { return std::make_unique<HydroVeBdtProp<true, DomainType, ParticleDataType>>(output, rank, s); }
+        else { return std::make_unique<HydroVeBdtProp<false, DomainType, ParticleDataType>>(output, rank, s); }
+    }
     if (choice == "std") { return std::make_unique<HydroProp<DomainType, ParticleDataType>>(output, rank); }
 #ifdef SPH_EXA_HAVE_GRACKLE
     if (choice == "std-cooling")
@@ -66,10 +72,15 @@ propagatorFactory(const std::string& choice, bool avClean, std::ostream& output,
     if (choice == "nbody") { return std::make_unique<NbodyProp<DomainType, ParticleDataType>>(output, rank); }
     if (choice == "turbulence")
     {
+        if (avClean) { return std::make_unique<TurbVeBdtProp<true, DomainType, ParticleDataType>>(output, rank, s); }
+        else { return std::make_unique<TurbVeBdtProp<false, DomainType, ParticleDataType>>(output, rank, s); }
+    }
+    if (choice == "turbulence-ve")
+    {
         if (avClean) { return std::make_unique<TurbVeProp<true, DomainType, ParticleDataType>>(output, rank, s); }
         else { return std::make_unique<TurbVeProp<false, DomainType, ParticleDataType>>(output, rank, s); }
     }
-    else if (choice == "RT-ve")
+    if (choice == "RT-ve")
     {
         if (avClean)
         {
@@ -77,7 +88,7 @@ propagatorFactory(const std::string& choice, bool avClean, std::ostream& output,
         }
         else { return std::make_unique<RTVeProp<false, DomainType, ParticleDataType>>(output, rank, s.at("gravityConstant")); }
     }
-    else { throw std::runtime_error("Unknown propagator choice: " + choice); }
+     throw std::runtime_error("Unknown propagator choice: " + choice);
 }
 
 } // namespace sphexa

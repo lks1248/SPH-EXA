@@ -76,33 +76,41 @@ HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, cstone::Vec3<Tc>& V, co
 }
 
 //! @brief update the energy according to Adams-Bashforth (2nd order)
-template<class T1, class T2>
-HOST_DEVICE_FUN double energyUpdate(double u_old, double dt, double dt_m1, T1 du, T2 du_m1)
+template<class TU, class TD>
+HOST_DEVICE_FUN TU energyUpdate(TU u_old, double dt, double dt_m1, TD du, TD du_m1)
 {
-    double deltaA = 0.5 * dt * dt / dt_m1;
-    double deltaB = dt + deltaA;
-    double u_new  = u_old + du * deltaB - du_m1 * deltaA;
+    TU u_new = u_old + du * dt + 0.5 * (du - du_m1) / dt_m1 * std::abs(dt) * dt;
     // To prevent u < 0 (when cooling with GRACKLE is active)
     if (u_new < 0.) { u_new = u_old * std::exp(u_new * dt / u_old); }
     return u_new;
 }
 
-//! @brief Update positions according to Press (2nd order)
+/*! @brief Update positions according to Press (2nd order)
+ *
+ * @tparam T      float or double
+ * @param dt      time delta from step n to n+1
+ * @param dt_m1   time delta from step n-1 to n
+ * @param Xn      coordinates at step n
+ * @param An      acceleration at step n
+ * @param dXn     X_n - X_n-1
+ * @param box     global coordinate bounding box
+ * @return        tuple(X_n+1, V_n+1, dX_n+1)
+ *
+ * time-reversibility:
+ * positionUpdate(-dt, dt_m1, X_n+1, An, dXn, box) will back-propagate X_n+1 to X_n
+ */
 template<class T, class Th>
-HOST_DEVICE_FUN auto positionUpdate(double dt, double dt_m1, cstone::Vec3<T> X, cstone::Vec3<T> A, cstone::Vec3<T> X_m1,
-                                    const cstone::Box<T>& box, bool anyFbc, const Th& hi, const Th* wh)
+HOST_DEVICE_FUN auto positionUpdate(double dt, double dt_m1, cstone::Vec3<T> Xn, cstone::Vec3<T> An,
+                                    cstone::Vec3<T> dXn, const cstone::Box<T>& box, bool anyFbc, const Th& hi, const Th* wh)
 {
-    double deltaA = dt + T(0.5) * dt_m1;
-    double deltaB = T(0.5) * (dt + dt_m1);
+    auto Vnmhalf = dXn * (T(1) / dt_m1);
+    auto Vn      = Vnmhalf + T(0.5) * dt_m1 * An;
+    auto Vnp1    = Vn + An * dt;
+    if(anyFbc) {fbcAdjust(Xn, Vnp1, An, box, hi, dt, wh);}
+    auto dXnp1   = (Vn + T(0.5) * An * std::abs(dt)) * dt;
+    auto Xnp1    = cstone::putInBox(Xn + dXnp1, box);
 
-    auto Val = X_m1 * (T(1) / dt_m1);
-    auto V   = Val + A * deltaA;
-    if (anyFbc) { fbcAdjust(X, V, A, box, hi, dt, wh); }
-    double deltaC = deltaB / deltaA;
-    auto   dX     = dt * Val + (V - Val) * dt * deltaC;
-    X             = cstone::putInBox(X + dX, box);
-
-    return util::tuple<cstone::Vec3<T>, cstone::Vec3<T>, cstone::Vec3<T>>{X, V, dX};
+    return util::tuple<cstone::Vec3<T>, cstone::Vec3<T>, cstone::Vec3<T>>{Xnp1, Vnp1, dXnp1};
 }
 
 template<class T, class Dataset>
@@ -133,6 +141,7 @@ void updatePositionsHost(size_t startIndex, size_t endIndex, Dataset& d, const c
 template<class Dataset, class T>
 void updateTempHost(size_t startIndex, size_t endIndex, Dataset& d, const cstone::Box<T>& box)
 {
+    using Tdu    = decltype(d.du[0]);
     bool haveMui = !d.mui.empty();
     auto constCv = idealGasCv(d.muiConst, d.gamma);
 
@@ -141,7 +150,7 @@ void updateTempHost(size_t startIndex, size_t endIndex, Dataset& d, const cstone
     {
         auto cv    = haveMui ? idealGasCv(d.mui[i], d.gamma) : constCv;
         auto u_old = cv * d.temp[i];
-        d.temp[i]  = energyUpdate(u_old, d.minDt, d.minDt_m1, d.du[i], d.du_m1[i]) / cv;
+        d.temp[i]  = energyUpdate(u_old, d.minDt, d.minDt_m1, d.du[i], Tdu(d.du_m1[i])) / cv;
         d.du_m1[i] = d.du[i];
     }
 }
@@ -149,36 +158,64 @@ void updateTempHost(size_t startIndex, size_t endIndex, Dataset& d, const cstone
 template<class Dataset, class T>
 void updateIntEnergyHost(size_t startIndex, size_t endIndex, Dataset& d, const cstone::Box<T>& box)
 {
-
+    using Tdu = decltype(d.du[0]);
 #pragma omp parallel for schedule(static)
     for (size_t i = startIndex; i < endIndex; i++)
     {
-        d.u[i]     = energyUpdate(d.u[i], d.minDt, d.minDt_m1, d.du[i], d.du_m1[i]);
+        d.u[i]     = energyUpdate(d.u[i], d.minDt, d.minDt_m1, d.du[i], Tdu(d.du_m1[i]));
         d.du_m1[i] = d.du[i];
     }
 }
 
+/*! @brief drift particles to a certain time within a time-step hierarchy
+ *
+ * @param grp            groups of particles to modify
+ * @param d
+ * @param dt_forward    new delta-t relative to start of current time-step hierarchy
+ * @param dt_backward   current delta-t relative to start of current time-step hierarchy
+ * @param dt_prevRung   minimum time step of the previous hierarchy
+ * @param rung          rung per particle in before the last integration step
+ */
+template<class Dataset>
+void driftPositions(const GroupView& grp, Dataset& d, float dt_forward, float dt_backward,
+                    util::array<float, Timestep::maxNumRungs> dt_prevRung, const uint8_t* rung)
+{
+    if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
+    {
+        auto  constCv = d.mui.empty() ? idealGasCv(d.muiConst, d.gamma) : -1.0;
+        auto* d_mui   = d.mui.empty() ? nullptr : rawPtr(d.devData.mui);
+
+        driftPositionsGpu(grp, dt_forward, dt_backward, dt_prevRung, rawPtr(d.devData.x), rawPtr(d.devData.y),
+                          rawPtr(d.devData.z), rawPtr(d.devData.vx), rawPtr(d.devData.vy), rawPtr(d.devData.vz),
+                          rawPtr(d.devData.x_m1), rawPtr(d.devData.y_m1), rawPtr(d.devData.z_m1), rawPtr(d.devData.ax),
+                          rawPtr(d.devData.ay), rawPtr(d.devData.az), rung, rawPtr(d.devData.temp), rawPtr(d.devData.u),
+                          rawPtr(d.devData.du), rawPtr(d.devData.du_m1), d_mui, d.gamma, constCv);
+    }
+}
+
 template<class T, class Dataset>
-void computePositions(size_t startIndex, size_t endIndex, Dataset& d, const cstone::Box<T>& box)
+void computePositions(const GroupView& grp, Dataset& d, const cstone::Box<T>& box, float dt_forward,
+                      util::array<float, Timestep::maxNumRungs> dt_m1, const uint8_t* rung = nullptr)
 {
     if constexpr (cstone::HaveGpu<typename Dataset::AcceleratorType>{})
     {
         T     constCv = d.mui.empty() ? idealGasCv(d.muiConst, d.gamma) : -1.0;
         auto* d_mui   = d.mui.empty() ? nullptr : rawPtr(d.devData.mui);
 
-        computePositionsGpu(startIndex, endIndex, d.minDt, d.minDt_m1, rawPtr(d.devData.x), rawPtr(d.devData.y),
-                            rawPtr(d.devData.z), rawPtr(d.devData.vx), rawPtr(d.devData.vy), rawPtr(d.devData.vz),
-                            rawPtr(d.devData.x_m1), rawPtr(d.devData.y_m1), rawPtr(d.devData.z_m1),
-                            rawPtr(d.devData.ax), rawPtr(d.devData.ay), rawPtr(d.devData.az), rawPtr(d.devData.temp),
+        computePositionsGpu(grp, dt_forward, dt_m1, rawPtr(d.devData.x), rawPtr(d.devData.y), rawPtr(d.devData.z),
+                            rawPtr(d.devData.vx), rawPtr(d.devData.vy), rawPtr(d.devData.vz), rawPtr(d.devData.x_m1),
+                            rawPtr(d.devData.y_m1), rawPtr(d.devData.z_m1), rawPtr(d.devData.ax), rawPtr(d.devData.ay),
+                            rawPtr(d.devData.az), rung,rawPtr(d.devData.temp),
                             rawPtr(d.devData.u), rawPtr(d.devData.du), rawPtr(d.devData.du_m1), rawPtr(d.devData.h),
-                            rawPtr(d.devData.wh), d_mui, d.gamma, constCv, box);
+                            rawPtr(d.devData.wh), d_mui, d.gamma, constCv,
+                            box);
     }
     else
     {
-        updatePositionsHost(startIndex, endIndex, d, box);
+        updatePositionsHost(grp.firstBody, grp.lastBody, d, box);
 
-        if (!d.temp.empty()) { updateTempHost(startIndex, endIndex, d, box); }
-        else if (!d.u.empty()) { updateIntEnergyHost(startIndex, endIndex, d, box); }
+        if (!d.temp.empty()) { updateTempHost(grp.firstBody, grp.lastBody, d, box); }
+        else if (!d.u.empty()) { updateIntEnergyHost(grp.firstBody, grp.lastBody, d, box); }
     }
 }
 
