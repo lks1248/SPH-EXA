@@ -44,9 +44,9 @@
 namespace sph
 {
 
-//! @brief checks whether a particle is close to a fixed boundary and reflects the velocity if so
+//! @brief checks whether a particle is close to a fixed boundary and reflects the acceleration if so
 template<class Tc, class Th>
-HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, cstone::Vec3<Tc>& V, const cstone::Vec3<Tc>& A,
+HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, const cstone::Vec3<Tc>& A,
                                const cstone::Box<Tc>& box, const Th& hi, const double dt, const Th* wh)
 {
     constexpr Th       threshold       = 2.;
@@ -63,14 +63,15 @@ HOST_DEVICE_FUN void fbcAdjust(const cstone::Vec3<Tc> X, cstone::Vec3<Tc>& V, co
     {
         if (isBoundaryFixed[j])
         {
+            /*legacy
             // Adjust the velocity if integration would put the particle in the "critical" zone
-            Tc dXj            = X[j] + V[j] * dt + 0.5 * A[j] * dt * dt;
-            Th relDistanceMax = std::abs(boxMax[j] - dXj) / hi;
-            Th relDistanceMin = std::abs(boxMin[j] - dXj) / hi;
+            Tc dXj            = X[j] + V[j] * dt + 0.5 * A[j] * dt * dt; */
+            Th relDistanceMax = std::abs(boxMax[j] - X[j]) / hi;
+            Th relDistanceMin = std::abs(boxMin[j] - X[j]) / hi;
             Th minDistance    = relDistanceMin < relDistanceMax ? relDistanceMin : relDistanceMax;
 
             // if (minDistance < 2 * threshold) { V[j] *= -1 + invTHold * minDistance; }
-            V[j] *= 1 - lt::lookup(wh, minDistance * invTHold);
+            A[j] *= 1 - lt::lookup(wh, minDistance * invTHold);
         }
     }
 }
@@ -103,11 +104,14 @@ template<class T, class Th>
 HOST_DEVICE_FUN auto positionUpdate(double dt, double dt_m1, cstone::Vec3<T> Xn, cstone::Vec3<T> An,
                                     cstone::Vec3<T> dXn, const cstone::Box<T>& box, bool anyFbc, const Th& hi, const Th* wh)
 {
+    if(anyFbc) {fbcAdjust(Xn,  An, box, hi, dt, wh);}
+
+
     auto Vnmhalf = dXn * (T(1) / dt_m1);
     auto Vn      = Vnmhalf + T(0.5) * dt_m1 * An;
     auto Vnp1    = Vn + An * dt;
-    if(anyFbc) {fbcAdjust(Xn, Vnp1, An, box, hi, dt, wh);}
     auto dXnp1   = (Vn + T(0.5) * An * std::abs(dt)) * dt;
+    //auto dXnp1 = dt*(Vnmhalf + (Vnp1 - Vnmhalf)*0.5*(dt+dt_m1)/(dt+0.5*dt_m1)); possible V-only integration, reversible??
     auto Xnp1    = cstone::putInBox(Xn + dXnp1, box);
 
     return util::tuple<cstone::Vec3<T>, cstone::Vec3<T>, cstone::Vec3<T>>{Xnp1, Vnp1, dXnp1};
