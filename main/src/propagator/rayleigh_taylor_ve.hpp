@@ -66,7 +66,7 @@ public:
         size_t first = domain.startIndex();
         size_t last  = domain.endIndex();
 
-        computeMarkRamp(first, last, d, domain.box());
+        computeMarkRamp(Base::groups_.view(), d, domain.box());
         timer.step("MarkRamp");
 
         // fixedBoundaryForceCorrection(first, last, d, domain.box());
