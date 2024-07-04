@@ -66,7 +66,7 @@ template<class Tc, class Tv, class Ta, class Tdu, class Tm1, class Tu, class Thy
 extern void computePositionsGpu(const GroupView& grp, float dt, util::array<float, Timestep::maxNumRungs> dt_m1, Tc* x,
                                 Tc* y, Tc* z, Tv* vx, Tv* vy, Tv* vz, Tm1* x_m1, Tm1* y_m1, Tm1* z_m1, Ta* ax, Ta* ay,
                                 Ta* az, const uint8_t* rung, Tu* temp, Tu* u, Tdu* du, Tm1* du_m1, Thydro* h,
-                                Thydro* mui, Thydro* gamma, Thydro muiConst, Thydro gammaConst,
+                                Thydro* mui, Thydro* gamma, Thydro* wh, Thydro muiConst, Thydro gammaConst,
                                 const cstone::Box<Tc>& box);
 
 template<class Th>
