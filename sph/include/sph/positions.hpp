@@ -131,7 +131,7 @@ void updatePositionsHost(size_t startIndex, size_t endIndex, Dataset& d, const c
         cstone::Vec3<T> X{d.x[i], d.y[i], d.z[i]};
         cstone::Vec3<T> X_m1{d.x_m1[i], d.y_m1[i], d.z_m1[i]};
         cstone::Vec3<T> V;
-        util::tie(X, V, X_m1) = positionUpdate(d.minDt, d.minDt_m1, X, A, X_m1, box, d.h[i], d.wh.data());
+        util::tie(X, V, X_m1) = positionUpdate(d.minDt, d.minDt_m1, X, A, X_m1, box, anyFBC, d.h[i], d.wh.data());
 
         util::tie(d.x[i], d.y[i], d.z[i])          = util::tie(X[0], X[1], X[2]);
         util::tie(d.x_m1[i], d.y_m1[i], d.z_m1[i]) = util::tie(X_m1[0], X_m1[1], X_m1[2]);
@@ -211,7 +211,7 @@ void computePositions(const GroupView& grp, Dataset& d, const cstone::Box<T>& bo
                             rawPtr(d.devData.y_m1), rawPtr(d.devData.z_m1), rawPtr(d.devData.ax), rawPtr(d.devData.ay),
                             rawPtr(d.devData.az), rung, rawPtr(d.devData.temp), rawPtr(d.devData.u),
                             rawPtr(d.devData.du), rawPtr(d.devData.du_m1), rawPtr(d.devData.h), d_mui, d_gamma,
-                            d.muiConst, d.gammaConst, box);
+                            rawPtr(d.devData.wh), d.muiConst, d.gammaConst, box);
     }
     else
     {
