@@ -15,7 +15,7 @@ using namespace sph;
 
 TEST(Integrator, timeReversal)
 {
-    using T = float;
+    using T    = float;
     double dtn = 0.1, dtnm1 = 0.5;
 
     Box<float> box(-100, 100);
@@ -38,7 +38,8 @@ TEST(Integrator, timeReversal)
 
     // undo last advance to an intermediate time
     Vec3<T> Xn_re;
-    std::tie(Xn_re, std::ignore, std::ignore) = positionUpdate(-0.5 * dtn, dtnm1, Xtmp, An, dXn, box, false, T(0), placeholder);
+    std::tie(Xn_re, std::ignore, std::ignore) =
+        positionUpdate(-0.5 * dtn, dtnm1, Xtmp, An, dXn, box, false, T(0), placeholder);
 
     // advance to final time
     Vec3<T> Xnp1_ts, Vnp1_ts, dXnp1_ts;
