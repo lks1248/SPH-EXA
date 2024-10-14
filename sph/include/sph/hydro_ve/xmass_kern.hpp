@@ -50,7 +50,8 @@ HOST_DEVICE_FUN inline T veDefinition(Tm mass, T rhoZero)
 template<size_t stride = 1, class Tc, class Tm, class T>
 HOST_DEVICE_FUN inline T xmassJLoop(cstone::LocalIndex i, Tc K, const cstone::Box<Tc>& box,
                                     const cstone::LocalIndex* neighbors, unsigned neighborsCount, const Tc* x,
-                                    const Tc* y, const Tc* z, const T* h, const Tm* m, const T* wh, const T* /*whd*/)
+                                    const Tc* y, const Tc* z, const T* h, const Tm* m, const T* wh, const T* /*whd*/,
+                                    T* rho0i)
 {
     auto xi = x[i];
     auto yi = y[i];
@@ -62,7 +63,7 @@ HOST_DEVICE_FUN inline T xmassJLoop(cstone::LocalIndex i, Tc K, const cstone::Bo
     T h3Inv = hInv * hInv * hInv;
 
     // initialize with self-contribution
-    T rho0i = mi;
+    *rho0i = mi;
     for (unsigned pj = 0; pj < neighborsCount; ++pj)
     {
         cstone::LocalIndex j = neighbors[stride * pj];
@@ -71,10 +72,10 @@ HOST_DEVICE_FUN inline T xmassJLoop(cstone::LocalIndex i, Tc K, const cstone::Bo
         T vloc = dist * hInv;
         T w    = lt::lookup(wh, vloc);
 
-        rho0i += w * m[j];
+        *rho0i += w * m[j];
     }
 
-    T xmassi = veDefinition(mi, rho0i * K * h3Inv);
+    T xmassi = veDefinition(mi, *rho0i * K * h3Inv);
     return xmassi;
 }
 

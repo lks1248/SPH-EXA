@@ -58,7 +58,7 @@ void computeXMassImpl(size_t startIndex, size_t endIndex, Dataset& d, const csto
     {
         size_t   ni       = i - startIndex;
         unsigned ncCapped = std::min(neighborsCount[i] - 1, d.ngmax);
-        xm[i]             = xmassJLoop(i, d.K, box, neighbors + d.ngmax * ni, ncCapped, x, y, z, h, m, wh, whd);
+        xm[i]             = xmassJLoop(i, d.K, box, neighbors + d.ngmax * ni, ncCapped, x, y, z, h, m, wh, whd, &d.rho0[i]);
 #ifndef NDEBUG
         if (std::isnan(xm[i]))
             printf("ERROR::Rho0(%zu) rho0 %f, position: (%f %f %f), h: %f\n", i, xm[i], x[i], y[i], z[i], h[i]);
