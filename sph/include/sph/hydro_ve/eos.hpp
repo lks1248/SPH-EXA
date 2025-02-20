@@ -158,7 +158,7 @@ void computeIdealGasEOS(size_t startIndex, size_t endIndex, Dataset& d)
         cuda::computeIdealGasEOS(startIndex, endIndex, d.muiConst, d.gamma, rawPtr(d.devData.temp), rawPtr(d.devData.u),
                                  rawPtr(d.devData.m), rawPtr(d.devData.kx), rawPtr(d.devData.xm),
                                  rawPtr(d.devData.gradh), rawPtr(d.devData.prho), rawPtr(d.devData.c),
-                                 rawPtr(d.devData.rho), rawPtr(d.devData.p));
+                                 rawPtr(d.devData.rho), rawPtr(d.devData.p), d.iteration);
     }
     else { computeIdealGasEOS_Impl(startIndex, endIndex, d); }
 }

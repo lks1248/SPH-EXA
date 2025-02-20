@@ -40,9 +40,9 @@ template<bool avClean, class Dataset>
 extern void computeMomentumEnergy(const GroupView&, float*, Dataset&, const cstone::Box<typename Dataset::RealType>&);
 
 template<class Tt, class Tm, class Th>
-extern void computeIdealGasEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, const Tt* temp, const Tt* u,
+extern void computeIdealGasEOS(size_t firstParticle, size_t lastParticle, Tm mui, Tt gamma, Tt* temp, Tt* u,
                                const Tm* m, const Th* kx, const Th* xm, const Th* gradh, Th* prho, Th* c, Th* rho,
-                               Th* p);
+                               Th* p, size_t iteration);
 
 template<class Th, class Tu>
 extern void computeIsothermalEOS(size_t first, size_t last, Th cConst, Th* c, Th* rho, Th* p, const Th* m, const Th* kx,
